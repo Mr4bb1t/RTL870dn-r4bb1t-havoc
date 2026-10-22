@@ -26,6 +26,7 @@ bool check_btn_enter();
 bool check_btn_sel_short();
 bool check_btn_sel_long();
 
+void flush_input();
 void handle_input();
 
 #endif // UI_STATE_H

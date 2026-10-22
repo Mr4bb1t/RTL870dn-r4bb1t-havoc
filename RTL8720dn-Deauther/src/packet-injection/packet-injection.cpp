@@ -57,9 +57,30 @@ void wifi_tx_beacon_frame(void* src_mac, void* dst_mac, const char *ssid) {
   memcpy(&frame.source, src_mac, 6);
   memcpy(&frame.access_point, src_mac, 6);
   memcpy(&frame.destination, dst_mac, 6);
-  for (int i = 0; ssid[i] != '\0'; i++) {
-    frame.ssid[i] = ssid[i];
-    frame.ssid_length++;
+  memset(frame.ssid, 0, sizeof(frame.ssid));
+
+  uint8_t s_len = 0;
+  for (int i = 0; ssid[i] != '\0' && i < 32; i++) {
+    frame.ssid[s_len++] = ssid[i];
   }
-  wifi_tx_raw_frame(&frame, 38 + frame.ssid_length);
+  frame.ssid_length = s_len; // Tag 0 (SSID) length
+
+  // Tag 1: Supported Rates (802.11 mandatory IE para smartphones reconhecerem o AP)
+  frame.ssid[s_len++] = 0x01; // Element ID: Supported Rates
+  frame.ssid[s_len++] = 0x08; // Length: 8
+  frame.ssid[s_len++] = 0x82; // 1(B) Mbps
+  frame.ssid[s_len++] = 0x84; // 2(B) Mbps
+  frame.ssid[s_len++] = 0x8b; // 5.5(B) Mbps
+  frame.ssid[s_len++] = 0x96; // 11(B) Mbps
+  frame.ssid[s_len++] = 0x0c; // 6 Mbps
+  frame.ssid[s_len++] = 0x12; // 9 Mbps
+  frame.ssid[s_len++] = 0x18; // 12 Mbps
+  frame.ssid[s_len++] = 0x24; // 18 Mbps
+
+  // Tag 3: DS Parameter Set (Canal 1)
+  frame.ssid[s_len++] = 0x03; // Element ID: DS Parameter Set
+  frame.ssid[s_len++] = 0x01; // Length: 1
+  frame.ssid[s_len++] = 0x01; // Channel 1
+
+  wifi_tx_raw_frame(&frame, 38 + s_len);
 }

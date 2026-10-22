@@ -190,22 +190,20 @@ void draw_btn(int x, int y, int w, int h, const char *text, bool is_selected) {
 
 void draw_signal_bars(int x, int y, int rssi, int color) {
   int bars = 1;
-  if (rssi > -60)
-    bars = 4;
-  else if (rssi > -70)
+  if (rssi > -65)
     bars = 3;
   else if (rssi > -80)
     bars = 2;
 
   display.setDrawColor(color);
-  for (int b = 0; b < 4; b++) {
+  for (int b = 0; b < 3; b++) {
     int bx = x + b * 3;
-    int bh = 2 + b * 2;
-    int by = y + 8 - bh;
+    int bh = 3 + b * 2;
+    int by = y + 7 - bh;
     if (b < bars) {
       display.drawBox(bx, by, 2, bh);
     } else {
-      display.drawPixel(bx, y + 7);
+      display.drawPixel(bx, y + 6);
     }
   }
   display.setDrawColor(1);
@@ -252,6 +250,20 @@ void render_splash(int progress) {
     fill_w = 66;
   if (fill_w > 0) {
     display.drawBox(56, 54, fill_w, 2);
+  }
+
+  // Status do scan WiFi em tempo real, abaixo da barra de progresso
+  // Exibe "Scanning..." enquanto aguarda, ou "X redes" quando já tem resultados
+  display.setFont(u8g2_font_4x6_tf);
+  if (scan_results.empty()) {
+    // Anima os pontos para indicar atividade: "Scanning" / "Scanning." / etc.
+    int dots = (int)(millis() / 400) % 4;
+    const char* dotStr[] = {"Scanning", "Scanning.", "Scanning..", "Scanning..."};
+    display.drawStr(54, 63, dotStr[dots]);
+  } else {
+    char buf[24];
+    snprintf(buf, sizeof(buf), "%d redes OK", (int)scan_results.size());
+    display.drawStr(54, 63, buf);
   }
 }
 
@@ -442,82 +454,87 @@ void render_scanning() {
 
 void render_net_list() {
   int markedCount = 0;
-  for (size_t i = 0; i < scan_results.size(); i++)
-    if (net_marked[i])
-      markedCount++;
+  for (size_t i = 0; i < scan_results.size(); i++) {
+    if (net_marked[i]) markedCount++;
+  }
 
-  char m_buf[14];
-  snprintf(m_buf, sizeof(m_buf), "[%d/%d] M:%d", net_sel + 1,
+  char m_buf[16];
+  snprintf(m_buf, sizeof(m_buf), "%d/%d Sel:%d", net_sel + 1,
            (int)scan_results.size(), markedCount);
   draw_header("NETWORKS", m_buf);
 
+  if (scan_results.empty()) {
+    draw_str_centered(32, "No networks found!");
+    draw_str_centered(46, "ENTER to rescan");
+    return;
+  }
+
   display.setFont(u8g2_font_5x7_tf);
-  const int visible = 5;
-  for (int i = 0; i < visible && (net_scroll + i) < (int)scan_results.size();
-       i++) {
-    int idx = net_scroll + i;
-    int y = 20 + i * 10;
+  const int visible = 4;
+  for (int i = 0; i < visible && (net_scroll + i) < (int)scan_results.size(); i++) {
+    int idx   = net_scroll + i;
+    int y_top = 13 + i * 12; // 13, 25, 37, 49
+    int y_txt = y_top + 8;   // Baseline for 5x7 font (height 7px)
     WiFiScanResult &r = scan_results[idx];
     bool isSel = (idx == net_sel);
 
+    // Selected row highlight: rounded bar
     if (isSel) {
-      display.drawBox(0, y - 8, 122, 10);
+      display.drawRBox(0, y_top, 122, 11, 2);
     }
     int color = isSel ? 0 : 1;
     display.setDrawColor(color);
 
-    // 7x7 Checkbox
-    display.drawFrame(1, y - 7, 7, 7);
+    // 7x7 Checkbox at X=2
+    display.drawFrame(2, y_top + 2, 7, 7);
     if (net_marked[idx]) {
-      display.drawBox(3, y - 5, 3, 3);
+      display.drawBox(4, y_top + 4, 3, 3);
     }
 
-    // SSID: 9 chars max to prevent channel cutoff. Marquee scroll if selected
-    // and > 9 chars
+    // SSID: up to 11 chars. Smooth pause & scroll if selected and > 11 chars
     String s = (r.ssid.length() > 0) ? r.ssid : String("*HIDDEN*");
-    char ssid_buf[14];
-    if (isSel && s.length() > 9) {
-      int maxOffset = s.length() - 9;
-      int scrollIdx = (millis() / 250) % (maxOffset + 4);
-      if (scrollIdx > maxOffset)
-        scrollIdx = maxOffset;
-      s.substring(scrollIdx, scrollIdx + 9)
-          .toCharArray(ssid_buf, sizeof(ssid_buf));
+    char ssid_buf[16];
+    if (isSel && s.length() > 11) {
+      int maxOffset = s.length() - 11;
+      int period = maxOffset + 6;
+      int step = (millis() / 450) % period;
+      int offset = 0;
+      if (step <= 2) {
+        offset = 0;
+      } else if (step < 2 + maxOffset) {
+        offset = step - 2;
+      } else {
+        offset = maxOffset;
+      }
+      s.substring(offset, offset + 11).toCharArray(ssid_buf, sizeof(ssid_buf));
     } else {
-      s.substring(0, 9).toCharArray(ssid_buf, sizeof(ssid_buf));
+      s.substring(0, 11).toCharArray(ssid_buf, sizeof(ssid_buf));
     }
-    display.drawStr(10, y, ssid_buf);
+    display.drawStr(12, y_txt, ssid_buf);
 
-    // Band badge [5G] / [2G] at X=68
-    display.drawStr(68, y, r.is5GHz ? "5G" : "2G");
+    // Band: 5G or 2G badge at X=72
+    display.drawStr(72, y_txt, r.is5GHz ? "5G" : "2G");
 
-    // Staggered RSSI signal meter at X=81
-    draw_signal_bars(81, y - 8, r.rssi, color);
-
-    // Channel number at X=94 (fits 3 digits like c149 cleanly before scrollbar
-    // at 124)
+    // Channel number at X=87
     char cbuf[8];
     snprintf(cbuf, sizeof(cbuf), "c%d", r.channel);
-    display.drawStr(94, y, cbuf);
+    display.drawStr(87, y_txt, cbuf);
+
+    // Clean 3-bar signal meter at X=111
+    draw_signal_bars(111, y_top + 2, r.rssi, color);
 
     display.setDrawColor(1);
   }
 
-  // Right Edge Vertical Scrollbar - Full height Y=12..62
+  // Right Edge Vertical Scrollbar
   if (scan_results.size() > (size_t)visible) {
-    display.drawVLine(125, 12, 50);
-    int trackHeight = 46;
+    display.drawVLine(126, 13, 49);
+    int trackHeight = 49;
     int thumbHeight = (int)((visible * trackHeight) / (int)scan_results.size());
-    if (thumbHeight < 8)
-      thumbHeight = 8;
+    if (thumbHeight < 6) thumbHeight = 6;
     int maxScroll = (int)scan_results.size() - visible;
-    int thumbY = 14 + (net_scroll * (trackHeight - thumbHeight)) / maxScroll;
-    display.drawBox(124, thumbY, 3, thumbHeight);
-  }
-
-  if (scan_results.empty()) {
-    draw_str_centered(32, "No networks found!");
-    draw_str_centered(44, "Return to Scan");
+    int thumbY = 13 + (net_scroll * (trackHeight - thumbHeight)) / maxScroll;
+    display.drawBox(125, thumbY, 3, thumbHeight);
   }
 }
 

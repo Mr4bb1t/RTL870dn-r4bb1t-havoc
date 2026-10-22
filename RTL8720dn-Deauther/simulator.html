@@ -720,18 +720,17 @@
 
     function draw_signal_bars(x, y, rssi, color = 1) {
       let bars = 1;
-      if (rssi > -60) bars = 4;
-      else if (rssi > -70) bars = 3;
+      if (rssi > -65) bars = 3;
       else if (rssi > -80) bars = 2;
 
-      for (let b = 0; b < 4; b++) {
+      for (let b = 0; b < 3; b++) {
         const bx = x + b * 3;
-        const bh = 2 + b * 2; // heights 2, 4, 6, 8
-        const by = y + 8 - bh;
+        const bh = 3 + b * 2; // heights 3, 5, 7
+        const by = y + 7 - bh;
         if (b < bars) {
           drawBox(bx, by, 2, bh, color);
         } else {
-          drawPixel(bx, y + 7, color);
+          drawPixel(bx, y + 6, color);
         }
       }
     }
@@ -1069,51 +1068,66 @@
       let markedCount = 0;
       for (let i = 0; i < scan_results.length; i++) if (net_marked[i]) markedCount++;
 
-      draw_header("NETWORKS", `[${net_sel + 1}/${scan_results.length}] M:${markedCount}`);
+      draw_header("NETWORKS", `${net_sel + 1}/${scan_results.length} Sel:${markedCount}`);
 
-      const visible = 5;
+      if (scan_results.length === 0) {
+        draw_str_centered(32, "No networks found!");
+        draw_str_centered(46, "ENTER to rescan");
+        return;
+      }
+
+      const visible = 4;
       for (let i = 0; i < visible && (net_scroll + i) < scan_results.length; i++) {
-        const idx = net_scroll + i;
-        const y = 20 + i * 10;
-        const r = scan_results[idx];
+        const idx   = net_scroll + i;
+        const y_top = 13 + i * 12;
+        const y_txt = y_top + 8;
+        const r     = scan_results[idx];
         const isSel = (idx === net_sel);
 
         if (isSel) {
-          drawBox(0, y - 8, 122, 10, 1);
+          drawBox(0, y_top, 122, 11, 1);
         }
         const color = isSel ? 0 : 1;
 
-        // Checkbox: 7x7 at x=1, y=y-7
-        drawFrame(1, y - 7, 7, 7, color);
+        // Checkbox: 7x7 at x=2
+        drawFrame(2, y_top + 2, 7, 7, color);
         if (net_marked[idx]) {
-          drawBox(3, y - 5, 3, 3, color);
+          drawBox(4, y_top + 4, 3, 3, color);
         }
 
-        // SSID (marquee scroll when selected if length > 9)
-        let ssidDisplay = r.ssid.substring(0, 9);
-        if (isSel && r.ssid.length > 9) {
-          const mOffset = Math.floor((Date.now() / 320) % (r.ssid.length + 3));
-          ssidDisplay = (r.ssid + "   " + r.ssid).substring(mOffset, mOffset + 9);
+        // SSID (up to 11 chars)
+        let ssidDisplay = r.ssid.substring(0, 11);
+        if (isSel && r.ssid.length > 11) {
+          const maxOffset = r.ssid.length - 11;
+          const period = maxOffset + 6;
+          const step = Math.floor((Date.now() / 450) % period);
+          let offset = 0;
+          if (step <= 2) offset = 0;
+          else if (step < 2 + maxOffset) offset = step - 2;
+          else offset = maxOffset;
+          ssidDisplay = r.ssid.substring(offset, offset + 11);
         }
-        drawStr(10, y, ssidDisplay, color);
+        drawStr(12, y_txt, ssidDisplay, color);
 
-        // Band badge [5G] / [2G] (X=68)
-        drawStr(68, y, r.is5GHz ? "5G" : "2G", color);
+        // Band badge [5G] / [2G] (X=72)
+        drawStr(72, y_txt, r.is5GHz ? "5G" : "2G", color);
 
-        // Staggered Signal Meter (X=82)
-        draw_signal_bars(82, y - 8, r.rssi, color);
+        // Channel number (X=87)
+        drawStr(87, y_txt, `c${r.channel}`, color);
 
-        // Channel number (X=94 - ample room for 3 digits e.g. c149)
-        drawStr(94, y, `c${r.channel}`, color);
+        // Signal Meter (X=111)
+        draw_signal_bars(111, y_top + 2, r.rssi, color);
       }
 
-      // Vertical Scrollbar on Right Edge - Full height Y=12..62
-      drawVLine(125, 12, 50, 1);
-      const trackHeight = 46;
-      const thumbHeight = Math.max(8, Math.round((visible / scan_results.length) * trackHeight));
-      const maxScroll = Math.max(1, scan_results.length - visible);
-      const thumbY = 14 + Math.round((net_scroll / maxScroll) * (trackHeight - thumbHeight));
-      drawBox(124, thumbY, 3, thumbHeight, 1);
+      // Vertical Scrollbar on Right Edge
+      if (scan_results.length > visible) {
+        drawVLine(126, 13, 49, 1);
+        const trackHeight = 49;
+        const thumbHeight = Math.max(6, Math.round((visible / scan_results.length) * trackHeight));
+        const maxScroll = Math.max(1, scan_results.length - visible);
+        const thumbY = 13 + Math.round((net_scroll / maxScroll) * (trackHeight - thumbHeight));
+        drawBox(125, thumbY, 3, thumbHeight, 1);
+      }
     }
 
     // Screen 5: Confirm Deauth Attack
@@ -1476,7 +1490,7 @@
         menu_sel = (menu_sel + 1) % 4;
       } else if (current_screen === SCR_NET_LIST) {
         if (net_sel < scan_results.length - 1) net_sel++;
-        if (net_sel >= net_scroll + 5) net_scroll = net_sel - 4;
+        if (net_sel >= net_scroll + 4) net_scroll = net_sel - 3;
       } else if (current_screen === SCR_DEAUTH_CONFIRM || current_screen === SCR_BEACON_CONFIRM) {
         menu_sel = (menu_sel + 1) % 2;
       } else if (current_screen === SCR_DEAUTH_RUNNING) {
