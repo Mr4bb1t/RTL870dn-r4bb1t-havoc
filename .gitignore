@@ -1,0 +1,17 @@
+# Binaries and build outputs
+build/
+*.bin
+*.hex
+*.elf
+*.o
+*.a
+*.d
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.bak
+.DS_Store
+Thumbs.db
