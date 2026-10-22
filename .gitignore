@@ -15,3 +15,5 @@ build/
 *.bak
 .DS_Store
 Thumbs.db
+
+RTL8720dn-Deauther/EvilAppleJuice-ESP32/
