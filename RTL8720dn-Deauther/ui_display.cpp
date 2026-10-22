@@ -851,29 +851,28 @@ void render_beacon_setup() {
 //   Y50-62 : action row  [⇧/page] [  SPACE  ] [⌫] [✓]
 // ─────────────────────────────────────────────────────────
 void render_beacon_keyboard() {
-  // Page label in header badge
-  const char* pageLabel = (kb_page == 0) ? "abc" :
-                          (kb_page == 1) ? "ABC" : "123";
-  draw_header("CUSTOM SSID", pageLabel);
-
   display.setFont(u8g2_font_5x7_tf);
 
-  // ── Preview bar ─────────────────────────────────────────
-  display.drawRBox(0, 10, 128, 11, 1);
-  display.setDrawColor(0);
+  // ── Preview do texto (fundo preto limpo, sem barra branca ofuscante) ──
+  display.setDrawColor(1);
   {
-    // Show last 19 chars + blinking cursor
-    char prev[22];
-    int  show = (kb_len > 19) ? 19 : kb_len;
-    memcpy(prev, beacon_custom_ssid + (kb_len - show), show);
-    // Blinking cursor: show '_' every 500ms
-    bool blink = ((millis() / 500) % 2) == 0;
+    // Mostra os últimos 20 caracteres + cursor piscante
+    char prev[26];
+    int  show = (kb_len > 20) ? 20 : kb_len;
+    if (show > 0) {
+      memcpy(prev, beacon_custom_ssid + (kb_len - show), show);
+    }
+    // Cursor piscante a cada 400ms
+    bool blink = ((millis() / 400) % 2) == 0;
     prev[show]   = blink ? '_' : ' ';
     prev[show+1] = '\0';
-    int pw = display.getStrWidth(prev);
-    display.drawStr((128 - pw) / 2, 19, prev);
+
+    display.drawStr(2, 9, "> ");
+    display.drawStr(14, 9, prev);
   }
-  display.setDrawColor(1);
+
+  // Linha divisória sutil
+  display.drawHLine(0, 13, 128);
 
   // ── Character grid ──────────────────────────────────────
   // 10 cols × 12px wide = 120px, centered (4px margin each side)

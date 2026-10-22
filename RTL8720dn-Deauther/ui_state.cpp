@@ -101,20 +101,20 @@ bool check_btn_left() {
     DEBUG_SER_PRINT("\n");
   }
 
-  // Detecta clique em D9:
-  // Se for ativo em GND (1 -> 0) ou se for ativo em 3.3V (0 -> 1)
-  if (cur_d9 != last_left_state && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
+  // Detecta clique em D9 (borda de descida: HIGH -> LOW com pull-up)
+  if (cur_d9 == LOW && last_left_state == HIGH && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
     btn_left_last = millis();
-    last_left_state = cur_d9;
-    DEBUG_SER_PRINT("[BTN] LEFT (D9) acionado!\n");
+    last_left_state = LOW;
+    DEBUG_SER_PRINT("[BTN] LEFT (D9) pressionado\n");
     return true;
   }
+  if (cur_d9 == HIGH) last_left_state = HIGH;
 
   // Suporte transparente ao pino reserva D3 (PA_30, logo ao lado do D2)
   if (cur_d3 == LOW && last_d3_state == HIGH && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
     btn_left_last = millis();
     last_d3_state = LOW;
-    DEBUG_SER_PRINT("[BTN] LEFT (D3) acionado!\n");
+    DEBUG_SER_PRINT("[BTN] LEFT (D3) pressionado\n");
     return true;
   }
   if (cur_d3 == HIGH) last_d3_state = HIGH;

@@ -3,30 +3,34 @@
 
 #include <Arduino.h>
 
-typedef struct {
-  uint16_t frame_control = 0xC0;
-  uint16_t duration = 0xFFFF;
-  uint8_t destination[6];
-  uint8_t source[6];
-  uint8_t access_point[6];
-  const uint16_t sequence_number = 0;
-  uint16_t reason = 0x06;
+typedef struct __attribute__((packed)) {
+  uint16_t frame_control;
+  uint16_t duration;
+  uint8_t  destination[6];
+  uint8_t  source[6];
+  uint8_t  access_point[6];
+  uint16_t sequence_number;
+  uint16_t reason;
 } DeauthFrame;
 
-typedef struct {
-  uint16_t frame_control = 0x80;
-  uint16_t duration = 0;
-  uint8_t destination[6];
-  uint8_t source[6];
-  uint8_t access_point[6];
-  const uint16_t sequence_number = 0;
-  const uint64_t timestamp = 0;
-  uint16_t beacon_interval = 0x64;
-  uint16_t ap_capabilities = 0x21;
-  const uint8_t ssid_tag = 0;
-  uint8_t ssid_length = 0;
-  uint8_t ssid[255];
+static_assert(sizeof(DeauthFrame) == 26, "DeauthFrame size must be 26 bytes");
+
+typedef struct __attribute__((packed)) {
+  uint16_t frame_control;
+  uint16_t duration;
+  uint8_t  destination[6];
+  uint8_t  source[6];
+  uint8_t  access_point[6];
+  uint16_t sequence_number;
+  uint64_t timestamp;
+  uint16_t beacon_interval;
+  uint16_t ap_capabilities;
+  uint8_t  ssid_tag;
+  uint8_t  ssid_length;
+  uint8_t  ssid[32]; // Max 802.11 SSID length
 } BeaconFrame;
+
+static_assert(sizeof(BeaconFrame) == 70, "BeaconFrame size must be 70 bytes (38 header + 32 SSID)");
 
 /*
  * Import the needed c functions from the closed-source libraries

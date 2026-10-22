@@ -70,20 +70,38 @@ static uint8_t generateApplePacket(const AppleDevice& dev, uint8_t* buf) {
   memset(buf, 0, 31);
 
   if (dev.type == APPLE_AUDIO) {
+    // Apple Proximity Pairing (Continuity Type 0x07):
+    // Byte 0: 0x1E (AD length: 30 bytes follow)
+    // Byte 1: 0xFF (Manufacturer Specific Data)
+    // Byte 2..3: 0x4C, 0x00 (Apple Inc. Company ID - Little Endian)
+    // Byte 4: 0x07 (Continuity Subtype: Proximity Pairing)
+    // Byte 5: 0x19 (Continuity payload length: 25 bytes follow)
+    // Byte 6: 0x07 (Prefix)
+    // Byte 7: modelId (Device Model ID)
+    // Byte 8..18: Status / Battery / Buds info (11 bytes)
+    // Byte 19..30: 12 padding bytes (zeros for unbonded proximity advertisement)
+    // Total AD structure length = 1 (length byte) + 30 bytes = 31 bytes.
     const uint8_t header[] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07};
     const uint8_t body[]   = {0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12};
     memcpy(buf, header, 7);
     buf[7] = dev.modelId;
     memcpy(buf + 8, body, 11);
-    return 19; // 7 header + 1 modelId + 11 body
+    return 31; // Total length: 1 AD len + 30 data bytes (25 continuity bytes)
   } else {
-    // APPLE_SETUP
+    // APPLE_SETUP (Continuity Type 0x04):
+    // Byte 0: 0x16 (AD length: 22 bytes follow)
+    // Byte 1: 0xFF (Manufacturer Specific Data)
+    // Byte 2..3: 0x4C, 0x00 (Apple Inc. Company ID - Little Endian)
+    // Byte 4..12: Setup prefix (9 bytes)
+    // Byte 13: modelId
+    // Byte 14..22: Setup suffix (9 bytes)
+    // Total AD structure length = 1 (length byte) + 22 bytes = 23 bytes.
     const uint8_t prefix[] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1};
     const uint8_t suffix[] = {0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
     memcpy(buf, prefix, 13);
     buf[13] = dev.modelId;
     memcpy(buf + 14, suffix, 9);
-    return 23; // 13 prefix + 1 modelId + 9 suffix
+    return 23; // Total length: 1 AD len + 22 data bytes
   }
 }
 

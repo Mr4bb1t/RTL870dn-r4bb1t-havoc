@@ -10,11 +10,17 @@ int  net_sel    = 0;
 int  net_scroll = 0;
 
 rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result) {
+  if (scan_result == NULL) return RTW_ERROR;
   if (scan_result->scan_complete == 0) {
     rtw_scan_result_t *record = &scan_result->ap_details;
-    record->SSID.val[record->SSID.len] = 0;
+    char ssid_buf[33];
+    uint8_t len = record->SSID.len;
+    if (len > 32) len = 32;
+    memcpy(ssid_buf, record->SSID.val, len);
+    ssid_buf[len] = '\0';
+
     WiFiScanResult result;
-    result.ssid    = String((const char *)record->SSID.val);
+    result.ssid    = String(ssid_buf);
     result.channel = record->channel;
     result.rssi    = record->signal_strength;
     result.is5GHz  = (record->channel >= 36);
