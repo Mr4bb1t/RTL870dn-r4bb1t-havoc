@@ -27,10 +27,10 @@ typedef struct __attribute__((packed)) {
   uint16_t ap_capabilities;
   uint8_t  ssid_tag;
   uint8_t  ssid_length;
-  uint8_t  ssid[32]; // Max 802.11 SSID length
+  uint8_t  ssid[255]; // Max 802.11 SSID length + IEs
 } BeaconFrame;
 
-static_assert(sizeof(BeaconFrame) == 70, "BeaconFrame size must be 70 bytes (38 header + 32 SSID)");
+static_assert(sizeof(BeaconFrame) == 293, "BeaconFrame size must be 293 bytes (38 header + 255 payload)");
 
 /*
  * Import the needed c functions from the closed-source libraries

@@ -18,6 +18,7 @@ extern int  net_sel;
 extern int  net_scroll;
 
 void startScan();
+void sortScanResults();
 rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result);
 
 #endif // WIFI_SCANNER_H

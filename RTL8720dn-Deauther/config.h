@@ -7,9 +7,9 @@
 // Hardware Pins (5-Button Tactical D-Pad + Action)
 // Mapeados para os pinos digitais reais do BW16 (0 a 12)
 // =========================================================
-#define BTN_UP    12  // D12 -> PA_12
+#define BTN_UP     6  // D6  -> PB_3 (Pino livre sem LED, vizinho ao D12)
 #define BTN_DOWN  11  // D11 -> PA_13
-#define BTN_LEFT   9  // D9  -> PA_15
+#define BTN_LEFT   3  // D3  -> PA_30
 #define BTN_RIGHT  2  // D2  -> PA_27
 #define BTN_ENTER 10  // D10 -> PA_14
 #define BTN_SEL   BTN_ENTER // Alias de compatibilidade
@@ -23,9 +23,10 @@
 // =========================================================
 // Timing / Attack Parameters
 // =========================================================
-#define BTN_DEBOUNCE_MS 180
-#define BLE_SPAM_INTERVAL_MS 400
-#define BEACON_INTERVAL_MS 60
+#define BTN_DEBOUNCE_MS 150
+#define BLE_SPAM_INTERVAL_MS 600    // 600ms per Apple device cycle: allows ~30 packets so iOS recognizes the accessory
+#define BEACON_INTERVAL_MS 100      // 100ms standard 802.11 beacon interval
+#define DEAUTH_INTERVAL_MS 60       // 60ms interval between deauth bursts, preventing RF lockup
 #define SPLASH_DURATION_MS 2500
 #define SCAN_DURATION_MS 5000
 

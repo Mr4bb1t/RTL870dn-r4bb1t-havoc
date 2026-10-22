@@ -62,6 +62,21 @@ static bool last_left_state  = HIGH;
 static bool last_right_state = HIGH;
 static bool last_enter_state = HIGH;
 
+void flush_input() {
+  uint32_t now = millis();
+  btn_up_last    = now;
+  btn_dn_last    = now;
+  btn_left_last  = now;
+  btn_right_last = now;
+  btn_enter_last = now;
+
+  last_up_state    = digitalRead(BTN_UP);
+  last_dn_state    = digitalRead(BTN_DOWN);
+  last_left_state  = digitalRead(BTN_LEFT);
+  last_right_state = digitalRead(BTN_RIGHT);
+  last_enter_state = digitalRead(BTN_ENTER);
+}
+
 bool check_btn_up() {
   bool cur = digitalRead(BTN_UP);
   if (cur == LOW && last_up_state == HIGH && (millis() - btn_up_last > BTN_DEBOUNCE_MS)) {
@@ -86,45 +101,24 @@ bool check_btn_dn() {
   return false;
 }
 
-static int  last_left_raw    = -1;
-static bool last_d3_state    = HIGH;
-
 bool check_btn_left() {
-  bool cur_d9 = digitalRead(BTN_LEFT);
-  bool cur_d3 = digitalRead(3); // Pino D3 (PA_30) reserva
-
-  // Log de diagnostico em tempo real de qualquer variacao eletrica no pino D9
-  if ((int)cur_d9 != last_left_raw) {
-    last_left_raw = cur_d9;
-    DEBUG_SER_PRINT("[PIN] D9 (LEFT) nivel logico mudou para: ");
-    DEBUG_SER_PRINT(cur_d9);
-    DEBUG_SER_PRINT("\n");
-  }
-
-  // Detecta clique em D9 (borda de descida: HIGH -> LOW com pull-up)
-  if (cur_d9 == LOW && last_left_state == HIGH && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
+  bool cur = digitalRead(BTN_LEFT);
+  // LEFT/RIGHT usam debounce maior (220ms) pois os pinos PA_30/PA_27 do BW16
+  // ficam propensos a bounce na linha de baixo do teclado e menus
+  if (cur == LOW && last_left_state == HIGH && (millis() - btn_left_last > 220)) {
     btn_left_last = millis();
     last_left_state = LOW;
-    DEBUG_SER_PRINT("[BTN] LEFT (D9) pressionado\n");
+    DEBUG_SER_PRINT("[BTN] LEFT pressionado\n");
     return true;
   }
-  if (cur_d9 == HIGH) last_left_state = HIGH;
-
-  // Suporte transparente ao pino reserva D3 (PA_30, logo ao lado do D2)
-  if (cur_d3 == LOW && last_d3_state == HIGH && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
-    btn_left_last = millis();
-    last_d3_state = LOW;
-    DEBUG_SER_PRINT("[BTN] LEFT (D3) pressionado\n");
-    return true;
-  }
-  if (cur_d3 == HIGH) last_d3_state = HIGH;
-
+  if (cur == HIGH) last_left_state = HIGH;
   return false;
 }
 
 bool check_btn_right() {
   bool cur = digitalRead(BTN_RIGHT);
-  if (cur == LOW && last_right_state == HIGH && (millis() - btn_right_last > BTN_DEBOUNCE_MS)) {
+  // LEFT/RIGHT usam debounce maior (220ms) - veja comentário em check_btn_left()
+  if (cur == LOW && last_right_state == HIGH && (millis() - btn_right_last > 220)) {
     btn_right_last = millis();
     last_right_state = LOW;
     DEBUG_SER_PRINT("[BTN] RIGHT pressionado\n");
@@ -164,6 +158,7 @@ static void do_scan() {
     render_screen();
     delay(40);
   }
+  sortScanResults();
   DEBUG_SER_PRINT("[SCAN] Varredura finalizada. Redes encontradas: ");
   DEBUG_SER_PRINT((int)scan_results.size());
   DEBUG_SER_PRINT("\n");
@@ -179,19 +174,21 @@ void handle_input() {
   bool enter = check_btn_enter();
   bool lon   = false;
 
+  if (up || dn || left || right || enter) {
+    DEBUG_SER_PRINT("[UI] Tela=");
+    DEBUG_SER_PRINT((int)current_screen);
+    DEBUG_SER_PRINT(" Item=");
+    DEBUG_SER_PRINT(menu_sel);
+    DEBUG_SER_PRINT("\n");
+  }
+
   switch (current_screen) {
     case SCR_MAIN_MENU:
-      if (left || up) {
-        menu_sel = (menu_sel - 1 + MAIN_MENU_LEN) % MAIN_MENU_LEN;
-        trigger_arrow_left();
-      }
-      if (right || dn) {
-        menu_sel = (menu_sel + 1) % MAIN_MENU_LEN;
-        trigger_arrow_right();
-      }
       if (enter) {
         if (menu_sel == 0) {
-          do_scan();
+          // Se já tiver resultados do scan automático da splash, vai direto.
+          // Caso contrário faz o scan agora (primeira entrada sem splash scan).
+          if (scan_results.empty()) do_scan();
           current_screen     = SCR_WIFI_MENU;
           menu_sel           = 0;
           wifi_menu_cur_x    = 0;
@@ -200,11 +197,23 @@ void handle_input() {
         else if (menu_sel == 1) { current_screen = SCR_BLE_MENU; menu_sel = 0; }
         else if (menu_sel == 2) { current_screen = SCR_ABOUT; }
       }
+      else if (left || up) {
+        menu_sel = (menu_sel - 1 + MAIN_MENU_LEN) % MAIN_MENU_LEN;
+        trigger_arrow_left();
+        DEBUG_SER_PRINT("  -> Menu Principal: ");
+        DEBUG_SER_PRINT(MAIN_MENU[menu_sel]);
+        DEBUG_SER_PRINT("\n");
+      }
+      else if (right || dn) {
+        menu_sel = (menu_sel + 1) % MAIN_MENU_LEN;
+        trigger_arrow_right();
+        DEBUG_SER_PRINT("  -> Menu Principal: ");
+        DEBUG_SER_PRINT(MAIN_MENU[menu_sel]);
+        DEBUG_SER_PRINT("\n");
+      }
       break;
 
     case SCR_WIFI_MENU:
-      if (left || up)  menu_sel = (menu_sel - 1 + WIFI_MENU_LEN) % WIFI_MENU_LEN;
-      if (right || dn) menu_sel = (menu_sel + 1) % WIFI_MENU_LEN;
       if (enter) {
         if (menu_sel == 0) {
           if (scan_results.empty()) do_scan();
@@ -228,6 +237,8 @@ void handle_input() {
           menu_sel       = 0;
         }
       }
+      else if (left || up)  menu_sel = (menu_sel - 1 + WIFI_MENU_LEN) % WIFI_MENU_LEN;
+      else if (right || dn) menu_sel = (menu_sel + 1) % WIFI_MENU_LEN;
       break;
 
     case SCR_NET_LIST:
@@ -238,7 +249,7 @@ void handle_input() {
       if (dn) {
         if (scan_results.empty()) { current_screen = SCR_WIFI_MENU; menu_sel = 0; break; }
         if (net_sel < (int)scan_results.size() - 1) net_sel++;
-        if (net_sel >= net_scroll + 5) net_scroll = net_sel - 4;
+        if (net_sel >= net_scroll + 4) net_scroll = net_sel - 3;
       }
       // ENTER: Alterna seleção da rede atual (Checkbox)
       if (enter && net_sel < (int)scan_results.size()) {
@@ -389,8 +400,8 @@ void handle_input() {
       break;
 
     case SCR_BLE_MENU:
-      if (enter || right) { start_ble_spam(); current_screen = SCR_BLE_RUNNING; }
-      if (left || dn)     { current_screen = SCR_MAIN_MENU; menu_sel = 1; }
+      if (enter || right)        { start_ble_spam(); current_screen = SCR_BLE_RUNNING; }
+      else if (left || dn || up) { current_screen = SCR_MAIN_MENU; menu_sel = 1; }
       break;
 
     case SCR_BLE_RUNNING:
@@ -402,7 +413,11 @@ void handle_input() {
       break;
 
     case SCR_ABOUT:
-      if (enter || left || dn) { current_screen = SCR_MAIN_MENU; menu_sel = 2; }
+      if (enter || left || dn || up || right) {
+        current_screen = SCR_MAIN_MENU;
+        menu_sel = 2;
+        DEBUG_SER_PRINT("[UI] Retornando de ABOUT ao Menu Principal\n");
+      }
       break;
 
     default: break;
