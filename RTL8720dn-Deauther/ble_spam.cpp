@@ -76,6 +76,7 @@ const AppleDevice ALL_APPLE_DEVICES[] = {
 static uint8_t generateApplePacket(const AppleDevice& dev, uint8_t* buf) {
   memset(buf, 0, 31);
 
+  if (dev.type == APPLE_AUDIO) {
     // Full 31-byte EvilAppleJuice payload (ADV record completo)
     // Bytes [8..18] são o corpo — randomizar 3 deles simula MACs diferentes,
     // evitando que o iOS deduplique e ignore pacotes repetidos.
