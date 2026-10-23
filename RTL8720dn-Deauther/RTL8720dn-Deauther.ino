@@ -69,15 +69,11 @@ void setup() {
   uint32_t splash_start = millis();
   bool wifi_ready_done = false;
   bool scan_started    = false;
-  while (millis() - splash_start < SPLASH_DURATION_MS) {
+  while (true) {
     uint32_t elapsed = millis() - splash_start;
-    int progress = (int)((elapsed * 64) / SPLASH_DURATION_MS);
-    display.clearBuffer();
-    render_splash(progress);
-    display.sendBuffer();
 
-    // Passo 1: liga a interface WiFi em 600ms (igual antes)
-    if (!wifi_ready_done && elapsed > 600) {
+    // Passo 1: liga a interface WiFi logo no inicio (150ms)
+    if (!wifi_ready_done && elapsed > 150) {
       DEBUG_SER_PRINT("[WiFi] Inicializando interface WiFi (netif UP)...\n");
       wifi_on(RTW_MODE_STA);
       DEBUG_SER_PRINT("[WiFi] Interface WiFi pronta!\n");
@@ -93,11 +89,32 @@ void setup() {
       scan_started = true;
     }
 
+    // Termina a splash se decorreu o tempo minimo de exibicao (SPLASH_DURATION_MS = 2500ms)
+    // E o scan concluiu com sucesso (ou atingiu o timeout maximo de 5000ms)
+    if (elapsed >= SPLASH_DURATION_MS && (scan_done || elapsed >= 5000)) {
+      break;
+    }
+
+    // Barra de progresso:
+    // Se scan_done = true, barra completa (64px)
+    // Senao preenche suavemente proporcional ao tempo
+    int progress;
+    if (scan_done) {
+      progress = 64;
+    } else {
+      progress = (int)((elapsed * 56) / 3500);
+      if (progress > 56) progress = 56;
+    }
+
+    display.clearBuffer();
+    render_splash(progress);
+    display.sendBuffer();
+
     check_serial_commands();
-    delay(25);
+    delay(20);
   }
 
-  // Ordena por RSSI para que a lista já venha pronta ao entrar no menu
+  // Ordena por RSSI para que os cards de wifi já venham prontos ao entrar no menu
   if (scan_started) {
     sortScanResults();
     DEBUG_SER_PRINT("[WiFi] Scan concluido. Redes encontradas: ");

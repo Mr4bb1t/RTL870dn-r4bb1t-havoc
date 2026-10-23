@@ -172,10 +172,11 @@ static void do_scan() {
   DEBUG_SER_PRINT("[SCAN] Iniciando varredura WiFi 2.4G + 5GHz...\n");
   startScan();
   uint32_t start_ms = millis();
-  while (millis() - start_ms < 3500) {
+  while (!scan_done && (millis() - start_ms < 5000)) {
+    check_serial_commands();
     tick_anim();
     render_screen();
-    delay(40);
+    delay(20);
   }
   sortScanResults();
   DEBUG_SER_PRINT("[SCAN] Varredura finalizada. Redes encontradas: ");
@@ -205,9 +206,7 @@ void handle_input() {
     case SCR_MAIN_MENU:
       if (enter) {
         if (menu_sel == 0) {
-          // Se já tiver resultados do scan automático da splash, vai direto.
-          // Caso contrário faz o scan agora (primeira entrada sem splash scan).
-          if (scan_results.empty()) do_scan();
+          // Entra direto no menu de WiFi carregando os cards de wifi sem reescanear
           current_screen     = SCR_WIFI_MENU;
           menu_sel           = 0;
           wifi_menu_cur_x    = 0;
@@ -239,7 +238,7 @@ void handle_input() {
     case SCR_WIFI_MENU:
       if (enter) {
         if (menu_sel == 0) {
-          if (scan_results.empty()) do_scan();
+          // Entra direto na lista de redes escaneadas
           current_screen = SCR_NET_LIST;
           net_sel = 0;
           net_scroll = 0;
@@ -249,6 +248,7 @@ void handle_input() {
           menu_sel = 0;
         }
         else if (menu_sel == 2) {
+          // Rescan explicitamente solicitado pelo usuario
           do_scan();
           current_screen     = SCR_WIFI_MENU;
           menu_sel           = 0;
@@ -274,9 +274,13 @@ void handle_input() {
         if (net_sel < (int)scan_results.size() - 1) net_sel++;
         if (net_sel >= net_scroll + 4) net_scroll = net_sel - 3;
       }
-      // ENTER: Alterna seleção da rede atual (Checkbox)
-      if (enter && net_sel < (int)scan_results.size()) {
-        net_marked[net_sel] = !net_marked[net_sel];
+      // ENTER: Alterna seleção da rede atual (Checkbox) ou rescan se lista vazia
+      if (enter) {
+        if (scan_results.empty()) {
+          do_scan();
+        } else if (net_sel < (int)scan_results.size()) {
+          net_marked[net_sel] = !net_marked[net_sel];
+        }
       }
       // RIGHT: Avanço direto para tela de confirmação do Deauth
       if (right || lon) {

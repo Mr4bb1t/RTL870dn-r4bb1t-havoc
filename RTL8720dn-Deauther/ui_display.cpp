@@ -256,13 +256,21 @@ void render_splash(int progress) {
   // Exibe "Scanning..." enquanto aguarda, ou "X redes" quando já tem resultados
   display.setFont(u8g2_font_4x6_tf);
   if (scan_results.empty()) {
-    // Anima os pontos para indicar atividade: "Scanning" / "Scanning." / etc.
-    int dots = (int)(millis() / 400) % 4;
-    const char* dotStr[] = {"Scanning", "Scanning.", "Scanning..", "Scanning..."};
-    display.drawStr(54, 63, dotStr[dots]);
+    if (scan_done) {
+      display.drawStr(54, 63, "0 redes OK");
+    } else {
+      // Anima os pontos para indicar atividade: "Scanning" / "Scanning." / etc.
+      int dots = (int)(millis() / 400) % 4;
+      const char* dotStr[] = {"Scanning", "Scanning.", "Scanning..", "Scanning..."};
+      display.drawStr(54, 63, dotStr[dots]);
+    }
   } else {
     char buf[24];
-    snprintf(buf, sizeof(buf), "%d redes OK", (int)scan_results.size());
+    if (scan_done) {
+      snprintf(buf, sizeof(buf), "%d redes OK", (int)scan_results.size());
+    } else {
+      snprintf(buf, sizeof(buf), "%d redes...", (int)scan_results.size());
+    }
     display.drawStr(54, 63, buf);
   }
 }

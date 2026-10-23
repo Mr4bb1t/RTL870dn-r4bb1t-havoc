@@ -16,6 +16,8 @@ extern std::vector<WiFiScanResult> scan_results;
 extern bool net_marked[MAX_SCAN_RESULTS];
 extern int  net_sel;
 extern int  net_scroll;
+extern bool scan_done;
+extern bool scan_in_progress;
 
 void startScan();
 void sortScanResults();

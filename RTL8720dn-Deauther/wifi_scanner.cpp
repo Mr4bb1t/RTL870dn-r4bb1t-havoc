@@ -6,8 +6,10 @@
 
 std::vector<WiFiScanResult> scan_results;
 bool net_marked[MAX_SCAN_RESULTS] = {false};
-int  net_sel    = 0;
-int  net_scroll = 0;
+int  net_sel          = 0;
+int  net_scroll       = 0;
+bool scan_done        = false;
+bool scan_in_progress = false;
 
 rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result) {
   if (scan_result == NULL) return RTW_ERROR;
@@ -53,6 +55,11 @@ rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result) {
       result.bssid_str = String(bssid_str);
       scan_results.push_back(result);
     }
+  } else {
+    // Ameba sinaliza fim da varredura completa (todas as frequências 2.4G e 5G)
+    scan_done = true;
+    scan_in_progress = false;
+    sortScanResults();
   }
   return RTW_SUCCESS;
 }
@@ -73,7 +80,9 @@ void sortScanResults() {
 void startScan() {
   scan_results.clear();
   memset(net_marked, 0, sizeof(net_marked));
-  net_sel    = 0;
-  net_scroll = 0;
+  net_sel          = 0;
+  net_scroll       = 0;
+  scan_done        = false;
+  scan_in_progress = true;
   wifi_scan_networks(scanResultHandler, NULL);
 }
