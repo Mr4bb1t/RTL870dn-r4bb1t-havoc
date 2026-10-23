@@ -21,35 +21,11 @@
 #define OLED_SDA   8  // D8 -> PA_26
 
 // =========================================================
-// Onboard RGB Status LED (BW16 Common Anode)
-// Red: D12 (PA_12), Green: D11 (PA_13), Blue: D10 (PA_14)
-// =========================================================
-#define LED_PIN_RED        12  // PA_12 (LED_BUILTIN_R)
-#define LED_PIN_GREEN      11  // PA_13 (LED_BUILTIN_B no core, Green na placa)
-#define LED_PIN_BLUE       10  // PA_14 (LED_BUILTIN_G no core, Blue na placa)
-#define LED_ACTIVE_LEVEL   LOW
-#define LED_INACTIVE_LEVEL HIGH
-
-extern bool rgb_attack_mode;
-extern bool led_red_state;
-
-void rgb_led_init();
-void enable_rgb_attack_mode();
-void disable_rgb_attack_mode();
-void tick_rgb_attack_effects();
-void set_rgb_raw(uint8_t r, uint8_t g, uint8_t b);
-void set_rgb_hsv(uint16_t h, uint8_t s, uint8_t v);
-
-// Funcoes de compatibilidade para controle simples do LED vermelho
-void led_red_init();
-void led_red_on();
-void led_red_off();
-void led_red_toggle();
-
-// =========================================================
 // Timing / Attack Parameters
 // =========================================================
-#define BTN_DEBOUNCE_MS 150
+#define BTN_DEBOUNCE_MS        150
+#define BTN_HOLD_DELAY_MS      350   // Tempo segurando o botão antes de iniciar auto-repeat (350ms)
+#define BTN_REPEAT_INTERVAL_MS 100   // Taxa de repetição contínua enquanto segurado (100ms = 10x/segundo)
 #define BLE_SPAM_INTERVAL_MS 600    // 600ms per Apple device cycle: allows ~30 packets so iOS recognizes the accessory
 #define BEACON_INTERVAL_MS 100      // 100ms standard 802.11 beacon interval
 #define DEAUTH_INTERVAL_MS 60       // 60ms interval between deauth bursts, preventing RF lockup

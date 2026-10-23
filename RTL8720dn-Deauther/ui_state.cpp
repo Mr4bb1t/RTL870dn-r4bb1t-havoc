@@ -70,93 +70,112 @@ int  kb_page = 0;
 int  kb_row  = 0, kb_col = 0;
 int  kb_len  = 0;
 
-static uint32_t btn_up_last    = 0;
-static uint32_t btn_dn_last    = 0;
-static uint32_t btn_left_last  = 0;
-static uint32_t btn_right_last = 0;
-static uint32_t btn_enter_last = 0;
+struct ButtonTracker {
+  uint8_t  pin;
+  uint32_t last_trigger;
+  uint32_t press_start;
+  bool     last_state;
+  bool     is_repeating;
+  bool     lock_until_release;
+};
 
-static bool last_up_state    = HIGH;
-static bool last_dn_state    = HIGH;
-static bool last_left_state  = HIGH;
-static bool last_right_state = HIGH;
-static bool last_enter_state = HIGH;
+static ButtonTracker btn_up_trk    = { (uint8_t)BTN_UP,    0, 0, HIGH, false, false };
+static ButtonTracker btn_dn_trk    = { (uint8_t)BTN_DOWN,  0, 0, HIGH, false, false };
+static ButtonTracker btn_left_trk  = { (uint8_t)BTN_LEFT,  0, 0, HIGH, false, false };
+static ButtonTracker btn_right_trk = { (uint8_t)BTN_RIGHT, 0, 0, HIGH, false, false };
+static ButtonTracker btn_enter_trk = { (uint8_t)BTN_ENTER, 0, 0, HIGH, false, false };
+
+static bool check_button(ButtonTracker &btn, const char* name, bool allow_repeat = true) {
+  bool cur = digitalRead(btn.pin);
+  uint32_t now = millis();
+
+  if (cur == HIGH) {
+    btn.last_state = HIGH;
+    btn.is_repeating = false;
+    btn.lock_until_release = false;
+    return false;
+  }
+
+  // cur == LOW (botão pressionado)
+  if (btn.lock_until_release) {
+    return false;
+  }
+
+  // Primeiro clique (borda de descida HIGH -> LOW)
+  if (btn.last_state == HIGH) {
+    if (now - btn.last_trigger > BTN_DEBOUNCE_MS) {
+      btn.last_state   = LOW;
+      btn.press_start  = now;
+      btn.last_trigger = now;
+      btn.is_repeating = false;
+      DEBUG_SER_PRINT("[BTN] ");
+      DEBUG_SER_PRINT(name);
+      DEBUG_SER_PRINT(" pressionado\n");
+      return true;
+    }
+    return false;
+  }
+
+  // Botão continua segurado (last_state == LOW)
+  if (!allow_repeat) {
+    return false;
+  }
+
+  uint32_t held = now - btn.press_start;
+  if (!btn.is_repeating) {
+    if (held >= BTN_HOLD_DELAY_MS) {
+      btn.is_repeating = true;
+      btn.last_trigger = now;
+      DEBUG_SER_PRINT("[BTN] ");
+      DEBUG_SER_PRINT(name);
+      DEBUG_SER_PRINT(" auto-repeat iniciado\n");
+      return true;
+    }
+  } else {
+    // Repetição contínua a cada BTN_REPEAT_INTERVAL_MS
+    if (now - btn.last_trigger >= BTN_REPEAT_INTERVAL_MS) {
+      btn.last_trigger = now;
+      return true;
+    }
+  }
+
+  return false;
+}
 
 void flush_input() {
   uint32_t now = millis();
-  btn_up_last    = now;
-  btn_dn_last    = now;
-  btn_left_last  = now;
-  btn_right_last = now;
-  btn_enter_last = now;
-
-  last_up_state    = digitalRead(BTN_UP);
-  last_dn_state    = digitalRead(BTN_DOWN);
-  last_left_state  = digitalRead(BTN_LEFT);
-  last_right_state = digitalRead(BTN_RIGHT);
-  last_enter_state = digitalRead(BTN_ENTER);
+  ButtonTracker* btns[] = { &btn_up_trk, &btn_dn_trk, &btn_left_trk, &btn_right_trk, &btn_enter_trk };
+  for (int i = 0; i < 5; i++) {
+    btns[i]->last_trigger = now;
+    btns[i]->is_repeating = false;
+    if (digitalRead(btns[i]->pin) == LOW) {
+      btns[i]->lock_until_release = true;
+      btns[i]->last_state = LOW;
+    } else {
+      btns[i]->lock_until_release = false;
+      btns[i]->last_state = HIGH;
+    }
+  }
 }
 
 bool check_btn_up() {
-  bool cur = digitalRead(BTN_UP);
-  if (cur == LOW && last_up_state == HIGH && (millis() - btn_up_last > BTN_DEBOUNCE_MS)) {
-    btn_up_last = millis();
-    last_up_state = LOW;
-    DEBUG_SER_PRINT("[BTN] UP pressionado\n");
-    return true;
-  }
-  if (cur == HIGH) last_up_state = HIGH;
-  return false;
+  return check_button(btn_up_trk, "UP", true);
 }
 
 bool check_btn_dn() {
-  bool cur = digitalRead(BTN_DOWN);
-  if (cur == LOW && last_dn_state == HIGH && (millis() - btn_dn_last > BTN_DEBOUNCE_MS)) {
-    btn_dn_last = millis();
-    last_dn_state = LOW;
-    DEBUG_SER_PRINT("[BTN] DOWN pressionado\n");
-    return true;
-  }
-  if (cur == HIGH) last_dn_state = HIGH;
-  return false;
+  return check_button(btn_dn_trk, "DOWN", true);
 }
 
 bool check_btn_left() {
-  bool cur = digitalRead(BTN_LEFT);
-  // Debounce responsivo (BTN_DEBOUNCE_MS = 150ms)
-  if (cur == LOW && last_left_state == HIGH && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
-    btn_left_last = millis();
-    last_left_state = LOW;
-    DEBUG_SER_PRINT("[BTN] LEFT pressionado\n");
-    return true;
-  }
-  if (cur == HIGH) last_left_state = HIGH;
-  return false;
+  return check_button(btn_left_trk, "LEFT", true);
 }
 
 bool check_btn_right() {
-  bool cur = digitalRead(BTN_RIGHT);
-  // Debounce responsivo (BTN_DEBOUNCE_MS = 150ms)
-  if (cur == LOW && last_right_state == HIGH && (millis() - btn_right_last > BTN_DEBOUNCE_MS)) {
-    btn_right_last = millis();
-    last_right_state = LOW;
-    DEBUG_SER_PRINT("[BTN] RIGHT pressionado\n");
-    return true;
-  }
-  if (cur == HIGH) last_right_state = HIGH;
-  return false;
+  return check_button(btn_right_trk, "RIGHT", true);
 }
 
 bool check_btn_enter() {
-  bool cur = digitalRead(BTN_ENTER);
-  if (cur == LOW && last_enter_state == HIGH && (millis() - btn_enter_last > BTN_DEBOUNCE_MS)) {
-    btn_enter_last = millis();
-    last_enter_state = LOW;
-    DEBUG_SER_PRINT("[BTN] ENTER pressionado\n");
-    return true;
-  }
-  if (cur == HIGH) last_enter_state = HIGH;
-  return false;
+  return check_button(btn_enter_trk, "ENTER", true);
 }
 
 bool check_btn_sel_short() {
@@ -173,14 +192,11 @@ static void do_scan() {
   startScan();
   uint32_t start_ms = millis();
   while (!scan_done && (millis() - start_ms < 5000)) {
-    if ((millis() / 150) % 2 == 0) led_red_on();
-    else led_red_off();
     check_serial_commands();
     tick_anim();
     render_screen();
     delay(20);
   }
-  led_red_off();
   sortScanResults();
   DEBUG_SER_PRINT("[SCAN] Varredura finalizada. Redes encontradas: ");
   DEBUG_SER_PRINT((int)scan_results.size());
@@ -190,15 +206,13 @@ static void do_scan() {
 }
 
 void handle_input() {
-  bool in_attack = (current_screen == SCR_DEAUTH_RUNNING ||
-                    current_screen == SCR_BEACON_RUNNING ||
-                    current_screen == SCR_BLE_RUNNING);
+  Screen prev_screen = current_screen;
 
   bool up    = check_btn_up();
-  bool dn    = in_attack ? false : check_btn_dn();
+  bool dn    = check_btn_dn();
   bool left  = check_btn_left();
   bool right = check_btn_right();
-  bool enter = in_attack ? false : check_btn_enter();
+  bool enter = check_btn_enter();
   bool lon   = false;
 
   if (up || dn || left || right || enter) {
@@ -285,7 +299,7 @@ void handle_input() {
       if (enter) {
         if (scan_results.empty()) {
           do_scan();
-        } else if (net_sel < (int)scan_results.size()) {
+        } else if (!btn_enter_trk.is_repeating && net_sel < (int)scan_results.size()) {
           net_marked[net_sel] = !net_marked[net_sel];
         }
       }
@@ -313,13 +327,12 @@ void handle_input() {
       break;
 
     case SCR_DEAUTH_RUNNING:
-      // Qualquer botao livre (LEFT, RIGHT, UP) ou ENTER/DOWN para o ataque
-      if (left || right || up || enter || dn) {
+      // Qualquer tecla de parada (ENTER, LEFT, DOWN) desarma o ataque
+      if (enter || left || dn) {
         stop_deauth();
         current_screen = SCR_WIFI_MENU;
         menu_sel = 0;
         wifi_menu_cur_x = 0;
-        flush_input();
       }
       break;
 
@@ -452,7 +465,10 @@ void handle_input() {
         // col 9   : [✓ OK]
         if (enter) {
           if (kb_col <= 1) {
-            kb_page = (kb_page + 1) % KB_PAGE_COUNT;
+            // [ABC] page toggle: apenas 1 por clique (não repete descontroladamente se segurado)
+            if (!btn_enter_trk.is_repeating) {
+              kb_page = (kb_page + 1) % KB_PAGE_COUNT;
+            }
           } else if (kb_col <= 6) {
             if (kb_len < 32) {
               beacon_custom_ssid[kb_len++] = ' ';
@@ -476,12 +492,11 @@ void handle_input() {
       break;
 
     case SCR_BEACON_RUNNING:
-      if (left || right || up || enter || dn) {
+      if (enter || dn) {
         stop_beacon();
         current_screen = SCR_WIFI_MENU;
         menu_sel = 1;
         wifi_menu_cur_x = 128;
-        flush_input();
       }
       break;
 
@@ -491,11 +506,10 @@ void handle_input() {
       break;
 
     case SCR_BLE_RUNNING:
-      if (left || right || up || enter || dn) {
+      if (enter || left || dn) {
         stop_ble_spam();
         current_screen = SCR_MAIN_MENU;
         menu_sel = 1;
-        flush_input();
       }
       break;
 
@@ -534,5 +548,11 @@ void handle_input() {
       break;
 
     default: break;
+  }
+
+  // Se houve troca de tela, impede que qualquer tecla que ainda esteja pressionada
+  // dispare na tela recém-carregada até que o usuário a solte
+  if (current_screen != prev_screen) {
+    flush_input();
   }
 }

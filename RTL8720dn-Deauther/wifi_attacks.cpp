@@ -164,7 +164,6 @@ void start_deauth() {
     isDeauthing       = true;
     sent_frames       = 0;
     current_group_idx = 0;
-    enable_rgb_attack_mode();
   }
 }
 
@@ -173,7 +172,6 @@ void stop_deauth() {
   deauth_group_count = 0;
   current_group_idx  = 0;
   last_hw_deauth_channel = -1;
-  disable_rgb_attack_mode();
 }
 
 void run_deauth_frame() {
@@ -210,12 +208,10 @@ void start_beacon() {
   isBeaconing     = true;
   beacon_frames   = 0;
   beacon_ssid_idx = 0;
-  enable_rgb_attack_mode();
 }
 
 void stop_beacon() {
   isBeaconing = false;
-  disable_rgb_attack_mode();
 }
 
 void run_beacon_frame() {

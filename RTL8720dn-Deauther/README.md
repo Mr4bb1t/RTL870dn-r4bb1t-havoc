@@ -39,20 +39,13 @@ Todas as entradas utilizam resistores de elevação internos configurados via `p
 
 | Chave | Função | Pino GPIO | Pino Físico BW16 | Conexão Externa | Estado Normal | Estado Pressionado |
 |:---|:---|:---:|:---:|:---|:---:|:---:|
-| **SW1** | UP | `PB_3` | D6 | `PB_3` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
+| **SW1** | UP | `PA_12` | D12 | `PA_12` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 | **SW2** | DOWN | `PA_13` | D11 | `PA_13` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
-| **SW3** | LEFT | `PA_30` | D3 | `PA_30` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
+| **SW3** | LEFT | `PA_15` | D9 | `PA_15` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 | **SW4** | RIGHT | `PA_27` | D2 | `PA_27` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 | **SW5** | ENTER | `PA_14` | D10 | `PA_14` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 
 *Debounce:* Implementado por software na máquina de estados com janela de bloqueio de 150 ms para eliminar repiques mecânicos.
-
-### 2.3 LED de Status Integrado (RF & Ataque)
-A placa BW16 possui um LED RGB onboard (ânodo comum). O canal vermelho está mapeado e utilizado pelo firmware como indicador tático de atividade de radiofrequência:
-
-| Componente | Pino GPIO | Pino Físico BW16 | Lógica | Comportamento |
-|:---|:---:|:---:|:---:|:---|
-| **LED Vermelho** | `PA_12` | D12 (`LED_BUILTIN_R`) | Active-LOW (0=Aceso) | • Pisca suave durante boot/scan da splash<br>• Estrobo ativo durante disparos de Deauth<br>• Pisca a cada Beacon injetado<br>• Alterna a cada troca de pacote BLE Spam<br>• Aceso contínuo ao entrar no Download Mode |
 
 ---
 

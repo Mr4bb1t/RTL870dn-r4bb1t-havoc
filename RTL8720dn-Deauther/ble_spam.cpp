@@ -177,7 +177,6 @@ void ble_spam_next() {
 void start_ble_spam() {
   if (ble_initialized) return;
 
-  enable_rgb_attack_mode();
   DEBUG_SER_PRINT("[BLE] Iniciando EvilAppleJuice (35 dispositivos Apple)...\n");
 
   BLE.init();
@@ -212,7 +211,6 @@ void start_ble_spam() {
 // =========================================================
 void stop_ble_spam() {
   isBleSpamming = false;
-  disable_rgb_attack_mode();
   if (ble_initialized) {
     BLE.configAdvert()->stopAdv();
     BLE.end();
