@@ -17,6 +17,7 @@
 #include "ble_spam.h"
 #include "ui_display.h"
 #include "ui_state.h"
+#include "system_mode.h"
 #include "debug.h"
 #include <Wire.h>
 
@@ -92,6 +93,7 @@ void setup() {
       scan_started = true;
     }
 
+    check_serial_commands();
     delay(25);
   }
 
@@ -110,6 +112,7 @@ void setup() {
 }
 
 void loop() {
+  check_serial_commands();
   tick_anim();
   handle_input();
 

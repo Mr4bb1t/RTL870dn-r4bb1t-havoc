@@ -75,7 +75,7 @@ enum BeaconMode {
 // =========================================================
 // Menu Labels (defined in ui_state.cpp)
 // =========================================================
-#define MAIN_MENU_LEN 3
+#define MAIN_MENU_LEN 4
 #define WIFI_MENU_LEN 4
 
 extern const char *MAIN_MENU[];

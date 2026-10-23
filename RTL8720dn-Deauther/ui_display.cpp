@@ -278,8 +278,10 @@ void render_main_menu() {
   } else if (menu_sel == 1) {
     display.drawXBMP(40, 0, 48, 48,
                      anim_bluetooth_48x48[center_anim_frame % 14]);
-  } else {
+  } else if (menu_sel == 2) {
     display.drawXBMP(40, 0, 48, 48, icon_about_48x48);
+  } else {
+    display.drawXBMP(40, 0, 48, 48, icon_flash_48x48);
   }
 
   // Centered Menu Title at Y=51
@@ -287,8 +289,9 @@ void render_main_menu() {
   draw_str_centered(51, MAIN_MENU[menu_sel], 1);
 
   // Balanced Pagination Pills at Y=58
+  int start_x = (128 - (MAIN_MENU_LEN * 9)) / 2;
   for (int i = 0; i < MAIN_MENU_LEN; i++) {
-    int dot_x = 52 + i * 9;
+    int dot_x = start_x + i * 9;
     if (i == menu_sel) {
       display.drawRBox(dot_x - 1, 58, 8, 3, 1);
     } else {
@@ -1008,13 +1011,17 @@ void render_ble_running() {
 void render_about() {
   draw_header("DEVICE INFO", "AmebaD");
 
-  // Clean micro-specs layout spanning the full height (bottom bar removed)
   display.setFont(u8g2_font_5x7_tf);
-  display.drawStr(6, 22, "SOC : RTL8720DN BW16");
-  display.drawStr(6, 32, "WIFI: 2.4GHz + 5GHz");
-  display.drawStr(6, 42, "BLE : Bluetooth 5.0");
-  display.drawStr(6, 52, "DISP: SH1106 128x64");
-  display.drawStr(6, 61, "FW  : v1.0.0 (HAVOC)");
+  display.drawStr(6, 21, "SOC : RTL8720DN BW16");
+  display.drawStr(6, 30, "WIFI: 2.4GHz + 5GHz");
+  display.drawStr(6, 39, "BLE : Bluetooth 5.0");
+  display.drawStr(6, 48, "FW  : v1.0.0 (HAVOC)");
+
+  // Botão atalho para Flash Mode
+  display.drawRBox(4, 52, 120, 11, 2);
+  display.setDrawColor(0);
+  draw_str_centered(60, "[ENTER] FLASH MODE", 0);
+  display.setDrawColor(1);
 }
 
 void render_screen() {

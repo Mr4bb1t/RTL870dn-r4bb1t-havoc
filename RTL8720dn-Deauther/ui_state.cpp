@@ -8,8 +8,9 @@
 #include "wifi_attacks.h"
 #include "ble_spam.h"
 #include "debug.h"
+#include "system_mode.h"
 
-const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Device Info"};
+const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Device Info", "Flash Mode"};
 const char* WIFI_MENU[] = {"Deauth Attack", "Beacon Flood", "Rescan WiFi", "< Back"};
 
 Screen current_screen = SCR_SPLASH;
@@ -196,6 +197,7 @@ void handle_input() {
         }
         else if (menu_sel == 1) { current_screen = SCR_BLE_MENU; menu_sel = 0; }
         else if (menu_sel == 2) { current_screen = SCR_ABOUT; }
+        else if (menu_sel == 3) { enterDownloadMode(); }
       }
       else if (left || up) {
         menu_sel = (menu_sel - 1 + MAIN_MENU_LEN) % MAIN_MENU_LEN;
@@ -413,7 +415,10 @@ void handle_input() {
       break;
 
     case SCR_ABOUT:
-      if (enter || left || dn || up || right) {
+      if (enter) {
+        enterDownloadMode();
+      }
+      else if (left || dn || up || right) {
         current_screen = SCR_MAIN_MENU;
         menu_sel = 2;
         DEBUG_SER_PRINT("[UI] Retornando de ABOUT ao Menu Principal\n");

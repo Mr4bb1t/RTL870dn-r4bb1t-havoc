@@ -774,7 +774,7 @@
     let net_sel = 0;
     let net_scroll = 0;
 
-    const MAIN_MENU = ["WiFi Attacks", "Bluetooth Spam", "Device Info"];
+    const MAIN_MENU = ["WiFi Attacks", "Bluetooth Spam", "Device Info", "Flash Mode"];
     const WIFI_MENU = ["Deauth Attack", "Beacon Flood", "Rescan WiFi", "< Back"];
 
     let anim_frame = 0;
@@ -917,8 +917,31 @@
         drawXBMP(40, 0, 48, 48, WIFI_FRAMES[center_anim_frame % 14]);
       } else if (menu_sel === 1) {
         drawXBMP(40, 0, 48, 48, BT_FRAMES[center_anim_frame % 14]);
-      } else {
+      } else if (menu_sel === 2) {
         drawXBMP(40, 0, 48, 48, ABOUT_ICON);
+      } else {
+        // Flash Mode Icon (Chip + Arrow)
+        ctx.strokeStyle = "#FFFFFF";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(40 + 12, 14, 24, 24);
+        // Arrow
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(40 + 22, 18, 4, 10);
+        ctx.beginPath();
+        ctx.moveTo(40 + 18, 28);
+        ctx.lineTo(40 + 30, 28);
+        ctx.lineTo(40 + 24, 34);
+        ctx.closePath();
+        ctx.fill();
+        // Pins
+        for (let p of [16, 21, 26, 31]) {
+          ctx.fillRect(40 + p, 10, 1, 4);
+          ctx.fillRect(40 + p, 38, 1, 4);
+        }
+        for (let p of [18, 23, 28, 33]) {
+          ctx.fillRect(40 + 8, p, 4, 1);
+          ctx.fillRect(40 + 36, p, 4, 1);
+        }
       }
 
       // Centered Menu Title at Y=51
@@ -926,8 +949,9 @@
       drawStrCentered(51, title, 1);
 
       // Balanced Pagination Pills at Y=58
-      for (let i = 0; i < 3; i++) {
-        const dot_x = 52 + i * 9;
+      const start_x = Math.floor((128 - (MAIN_MENU.length * 9)) / 2);
+      for (let i = 0; i < MAIN_MENU.length; i++) {
+        const dot_x = start_x + i * 9;
         if (i === menu_sel) {
           drawRBox(dot_x - 1, 58, 8, 3, 1, 1);
         } else {
@@ -1359,11 +1383,13 @@
       draw_header("DEVICE INFO", "AmebaD");
 
       // Structured micro-specs layout across full screen
-      drawStr(4, 22, "SOC : RTL8720DN BW16");
-      drawStr(4, 32, "WIFI: 2.4GHz + 5GHz");
-      drawStr(4, 42, "BLE : Bluetooth 5.0");
-      drawStr(4, 52, "DISP: SH1106 128x64");
-      drawStr(4, 61, "FIRM: HAVOC v2.4");
+      drawStr(4, 21, "SOC : RTL8720DN BW16");
+      drawStr(4, 30, "WIFI: 2.4GHz + 5GHz");
+      drawStr(4, 39, "BLE : Bluetooth 5.0");
+      drawStr(4, 48, "FW  : v1.0.0 (HAVOC)");
+
+      drawRBox(4, 52, 120, 11, 2, 1);
+      drawStrCentered(60, "[ENTER] FLASH MODE", 0);
     }
 
     function render_screen() {
@@ -1469,7 +1495,7 @@
     function pressUp() {
       flashBtn("btn-up");
       if (current_screen === SCR_MAIN_MENU) {
-        menu_sel = (menu_sel - 1 + 3) % 3;
+        menu_sel = (menu_sel - 1 + MAIN_MENU.length) % MAIN_MENU.length;
         trigger_arrow_left();
       } else if (current_screen === SCR_WIFI_MENU) {
         menu_sel = (menu_sel - 1 + 4) % 4;
@@ -1484,7 +1510,7 @@
     function pressDown() {
       flashBtn("btn-dn");
       if (current_screen === SCR_MAIN_MENU) {
-        menu_sel = (menu_sel + 1) % 3;
+        menu_sel = (menu_sel + 1) % MAIN_MENU.length;
         trigger_arrow_right();
       } else if (current_screen === SCR_WIFI_MENU) {
         menu_sel = (menu_sel + 1) % 4;
@@ -1519,12 +1545,11 @@
     function pressLeft() {
       flashBtn("btn-left");
       if (current_screen === SCR_MAIN_MENU) {
-        menu_sel = (menu_sel - 1 + 3) % 3;
+        menu_sel = (menu_sel - 1 + MAIN_MENU.length) % MAIN_MENU.length;
         trigger_arrow_left();
       } else if (current_screen === SCR_WIFI_MENU) {
         menu_sel = (menu_sel - 1 + 4) % 4;
       } else if (current_screen === SCR_NET_LIST) {
-        // Quick return to WiFi Menu
         current_screen = SCR_WIFI_MENU;
         menu_sel = 0;
         wifi_menu_cur_x = 0;
@@ -1556,19 +1581,35 @@
     function pressRight() {
       flashBtn("btn-right");
       if (current_screen === SCR_MAIN_MENU) {
-        menu_sel = (menu_sel + 1) % 3;
+        menu_sel = (menu_sel + 1) % MAIN_MENU.length;
         trigger_arrow_right();
       } else if (current_screen === SCR_WIFI_MENU) {
         menu_sel = (menu_sel + 1) % 4;
       } else if (current_screen === SCR_NET_LIST) {
-        // Quick proceed to Deauth Attack Confirmation
         current_screen = SCR_DEAUTH_CONFIRM;
         menu_sel = 0;
       } else if (current_screen === SCR_DEAUTH_CONFIRM || current_screen === SCR_BEACON_CONFIRM) {
-        menu_sel = 0; // ATTACK / START
+        menu_sel = 0;
       } else if (current_screen === SCR_BLE_MENU) {
         current_screen = SCR_BLE_RUNNING;
         ble_pkt_sent = 0;
+      }
+    }
+
+    function triggerDownloadMode() {
+      current_screen = -1;
+      clearBuffer();
+      draw_header("DOWNLOAD MODE", "UART");
+      drawStrCentered(28, "Waiting for Flash...", 1);
+      drawStrCentered(38, "PA7 (LOG_TX) Active", 1);
+      drawStrCentered(48, "BKUP Reg Flag Set", 1);
+      drawStrCentered(58, "[Press RST to Exit]", 1);
+      const logBox = document.getElementById("serial-log");
+      if (logBox) {
+        logBox.innerHTML += `\n[SYSTEM] BKUP_Set(0, BIT_UARTBURN_BOOT) executado!`;
+        logBox.innerHTML += `\n[SYSTEM] sys_reset() acionado -> BW16 em UART Download Mode!`;
+        logBox.innerHTML += `\n[SYSTEM] Pronto para gravacao no Arduino IDE ou Image Tool.\n`;
+        logBox.scrollTop = logBox.scrollHeight;
       }
     }
 
@@ -1580,9 +1621,13 @@
         } else if (menu_sel === 1) {
           current_screen = SCR_BLE_MENU;
           menu_sel = 0;
-        } else {
+        } else if (menu_sel === 2) {
           current_screen = SCR_ABOUT;
+        } else if (menu_sel === 3) {
+          triggerDownloadMode();
         }
+      } else if (current_screen === SCR_ABOUT) {
+        triggerDownloadMode();
       } else if (current_screen === SCR_WIFI_MENU) {
         if (menu_sel === 0) {
           current_screen = SCR_NET_LIST;
