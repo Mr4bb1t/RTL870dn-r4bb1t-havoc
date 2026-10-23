@@ -123,9 +123,8 @@ bool check_btn_dn() {
 
 bool check_btn_left() {
   bool cur = digitalRead(BTN_LEFT);
-  // LEFT/RIGHT usam debounce maior (220ms) pois os pinos PA_30/PA_27 do BW16
-  // ficam propensos a bounce na linha de baixo do teclado e menus
-  if (cur == LOW && last_left_state == HIGH && (millis() - btn_left_last > 220)) {
+  // Debounce responsivo (BTN_DEBOUNCE_MS = 150ms)
+  if (cur == LOW && last_left_state == HIGH && (millis() - btn_left_last > BTN_DEBOUNCE_MS)) {
     btn_left_last = millis();
     last_left_state = LOW;
     DEBUG_SER_PRINT("[BTN] LEFT pressionado\n");
@@ -137,8 +136,8 @@ bool check_btn_left() {
 
 bool check_btn_right() {
   bool cur = digitalRead(BTN_RIGHT);
-  // LEFT/RIGHT usam debounce maior (220ms) - veja comentário em check_btn_left()
-  if (cur == LOW && last_right_state == HIGH && (millis() - btn_right_last > 220)) {
+  // Debounce responsivo (BTN_DEBOUNCE_MS = 150ms)
+  if (cur == LOW && last_right_state == HIGH && (millis() - btn_right_last > BTN_DEBOUNCE_MS)) {
     btn_right_last = millis();
     last_right_state = LOW;
     DEBUG_SER_PRINT("[BTN] RIGHT pressionado\n");
@@ -367,12 +366,62 @@ void handle_input() {
       break;
 
     case SCR_BEACON_KEYBOARD:
-      // Rows 0-2: character grid  |  Row 3: action row
-      // UP from row 0 → action row (3), DOWN from action row → row 0
-      if (up)    kb_row = (kb_row <= 0)           ? KB_CHAR_ROWS : kb_row - 1;
-      if (dn)    kb_row = (kb_row >= KB_CHAR_ROWS) ? 0            : kb_row + 1;
-      if (left)  kb_col = (kb_col - 1 + KB_COLS) % KB_COLS;
-      if (right) kb_col = (kb_col + 1) % KB_COLS;
+      // Rows 0-2: character grid (3 rows x 10 cols)
+      // Row 3: action row ([ABC/123], [SPACE], [DEL], [OK])
+      if (up) {
+        if (kb_row == KB_CHAR_ROWS) {
+          // Subindo da barra de acao para o grid de caracteres
+          if (kb_col <= 1)      kb_col = 0;
+          else if (kb_col <= 6) kb_col = 4;
+          else if (kb_col <= 8) kb_col = 7;
+          else                  kb_col = 9;
+          kb_row = KB_CHAR_ROWS - 1;
+        } else if (kb_row <= 0) {
+          kb_row = KB_CHAR_ROWS;
+          if (kb_col <= 1)      kb_col = 0;
+          else if (kb_col <= 6) kb_col = 4;
+          else if (kb_col <= 8) kb_col = 7;
+          else                  kb_col = 9;
+        } else {
+          kb_row--;
+        }
+      }
+
+      if (dn) {
+        if (kb_row >= KB_CHAR_ROWS) {
+          kb_row = 0;
+        } else if (kb_row == KB_CHAR_ROWS - 1) {
+          // Descendo para a barra de acao: ajusta direto para o botao correspondente
+          kb_row = KB_CHAR_ROWS;
+          if (kb_col <= 1)      kb_col = 0;
+          else if (kb_col <= 6) kb_col = 4;
+          else if (kb_col <= 8) kb_col = 7;
+          else                  kb_col = 9;
+        } else {
+          kb_row++;
+        }
+      }
+
+      if (kb_row < KB_CHAR_ROWS) {
+        // Grid de caracteres de 10 colunas
+        if (left)  kb_col = (kb_col - 1 + KB_COLS) % KB_COLS;
+        if (right) kb_col = (kb_col + 1) % KB_COLS;
+      } else {
+        // Barra de acao inferior ([ABC], [SPACE], [DEL], [OK]):
+        // Pula diretamente entre os 4 botoes a cada clique de LEFT ou RIGHT!
+        if (right) {
+          if (kb_col <= 1)      kb_col = 4; // ABC -> SPACE
+          else if (kb_col <= 6) kb_col = 7; // SPACE -> DEL
+          else if (kb_col <= 8) kb_col = 9; // DEL -> OK
+          else                  kb_col = 0; // OK -> ABC
+        }
+        if (left) {
+          if (kb_col <= 1)      kb_col = 9; // ABC -> OK
+          else if (kb_col <= 6) kb_col = 0; // SPACE -> ABC
+          else if (kb_col <= 8) kb_col = 4; // DEL -> SPACE
+          else                  kb_col = 7; // OK -> DEL
+        }
+      }
 
       if (kb_row < KB_CHAR_ROWS) {
         // ── Character rows ──────────────────────────────
