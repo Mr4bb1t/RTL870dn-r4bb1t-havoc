@@ -278,10 +278,8 @@ void render_main_menu() {
   } else if (menu_sel == 1) {
     display.drawXBMP(40, 0, 48, 48,
                      anim_bluetooth_48x48[center_anim_frame % 14]);
-  } else if (menu_sel == 2) {
-    display.drawXBMP(40, 0, 48, 48, icon_about_48x48);
   } else {
-    display.drawXBMP(40, 0, 48, 48, icon_flash_48x48);
+    display.drawXBMP(40, 0, 48, 48, icon_about_48x48);
   }
 
   // Centered Menu Title at Y=51
@@ -289,9 +287,8 @@ void render_main_menu() {
   draw_str_centered(51, MAIN_MENU[menu_sel], 1);
 
   // Balanced Pagination Pills at Y=58
-  int start_x = (128 - (MAIN_MENU_LEN * 9)) / 2;
   for (int i = 0; i < MAIN_MENU_LEN; i++) {
-    int dot_x = start_x + i * 9;
+    int dot_x = 52 + i * 9;
     if (i == menu_sel) {
       display.drawRBox(dot_x - 1, 58, 8, 3, 1);
     } else {
@@ -1009,19 +1006,50 @@ void render_ble_running() {
 }
 
 void render_about() {
-  draw_header("DEVICE INFO", "AmebaD");
+  char count_buf[14];
+  snprintf(count_buf, sizeof(count_buf), "%d/%d", about_sel + 1, ABOUT_ITEMS_COUNT);
+  draw_header("DEVICE INFO", count_buf);
 
   display.setFont(u8g2_font_5x7_tf);
-  display.drawStr(6, 21, "SOC : RTL8720DN BW16");
-  display.drawStr(6, 30, "WIFI: 2.4GHz + 5GHz");
-  display.drawStr(6, 39, "BLE : Bluetooth 5.0");
-  display.drawStr(6, 48, "FW  : v1.0.0 (HAVOC)");
+  const int visible = 4;
+  for (int i = 0; i < visible && (about_scroll + i) < ABOUT_ITEMS_COUNT; i++) {
+    int idx   = about_scroll + i;
+    int y_top = 13 + i * 12; // 13, 25, 37, 49
+    int y_txt = y_top + 8;
+    bool isSel = (idx == about_sel);
 
-  // Botão atalho para Flash Mode
-  display.drawRBox(4, 52, 120, 11, 2);
-  display.setDrawColor(0);
-  draw_str_centered(60, "[ENTER] FLASH MODE", 0);
-  display.setDrawColor(1);
+    if (isSel) {
+      display.drawRBox(0, y_top, 122, 11, 2);
+    }
+    int color = isSel ? 0 : 1;
+    display.setDrawColor(color);
+
+    const AboutItem &item = ABOUT_ITEMS[idx];
+    if (item.isAction) {
+      if (idx == ABOUT_ITEMS_COUNT - 2) {
+        display.drawStr(isSel ? 6 : 4, y_txt, "> ENTRAR FLASH MODE");
+      } else {
+        display.drawStr(isSel ? 6 : 4, y_txt, "< VOLTAR AO MENU");
+      }
+    } else {
+      char row_buf[32];
+      snprintf(row_buf, sizeof(row_buf), "%-5s: %s", item.label, item.value);
+      display.drawStr(4, y_txt, row_buf);
+    }
+
+    display.setDrawColor(1);
+  }
+
+  // Right Edge Vertical Scrollbar
+  if (ABOUT_ITEMS_COUNT > visible) {
+    display.drawVLine(126, 13, 49);
+    int trackHeight = 49;
+    int thumbHeight = (int)((visible * trackHeight) / ABOUT_ITEMS_COUNT);
+    if (thumbHeight < 6) thumbHeight = 6;
+    int maxScroll = ABOUT_ITEMS_COUNT - visible;
+    int thumbY = 13 + (about_scroll * (trackHeight - thumbHeight)) / maxScroll;
+    display.drawBox(125, thumbY, 3, thumbHeight);
+  }
 }
 
 void render_screen() {

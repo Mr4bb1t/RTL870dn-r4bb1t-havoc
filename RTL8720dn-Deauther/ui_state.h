@@ -9,6 +9,19 @@ extern int    menu_sel;
 // Beacon setup
 extern int  beacon_setup_sel;
 
+// About (Device Info) scroll state
+extern int  about_sel;
+extern int  about_scroll;
+
+struct AboutItem {
+  const char* label;
+  const char* value;
+  bool isAction;
+};
+
+extern const AboutItem ABOUT_ITEMS[];
+extern const int ABOUT_ITEMS_COUNT;
+
 // On-screen keyboard (phone-style, 3 pages)
 #define KB_COLS       10
 #define KB_CHAR_ROWS   3

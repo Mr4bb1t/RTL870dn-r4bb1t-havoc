@@ -10,8 +10,27 @@
 #include "debug.h"
 #include "system_mode.h"
 
-const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Device Info", "Flash Mode"};
+const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Device Info"};
 const char* WIFI_MENU[] = {"Deauth Attack", "Beacon Flood", "Rescan WiFi", "< Back"};
+
+const AboutItem ABOUT_ITEMS[] = {
+  {"SOC",   "RTL8720DN", false},
+  {"MOD",   "Ai-Thinker BW16", false},
+  {"CPU",   "KM4 200M+KM0 20M", false},
+  {"WIFI",  "Dual 2.4G+5G", false},
+  {"BLE",   "Bluetooth 5.0", false},
+  {"RAM",   "512KB SRAM", false},
+  {"FLASH", "2MB Embedded", false},
+  {"DISP",  "SH1106 128x64", false},
+  {"FW",    "v1.0.0 (HAVOC)", false},
+  {"DEV",   "Mr4bb1t", false},
+  {"FLASH", "[ENTRAR FLASH MODE]", true},
+  {"BACK",  "[VOLTAR AO MENU]", true}
+};
+const int ABOUT_ITEMS_COUNT = sizeof(ABOUT_ITEMS) / sizeof(ABOUT_ITEMS[0]);
+
+int about_sel    = 0;
+int about_scroll = 0;
 
 Screen current_screen = SCR_SPLASH;
 int    menu_sel       = 0;
@@ -196,8 +215,11 @@ void handle_input() {
           wifi_menu_target_x = 0;
         }
         else if (menu_sel == 1) { current_screen = SCR_BLE_MENU; menu_sel = 0; }
-        else if (menu_sel == 2) { current_screen = SCR_ABOUT; }
-        else if (menu_sel == 3) { enterDownloadMode(); }
+        else if (menu_sel == 2) { 
+          current_screen = SCR_ABOUT; 
+          about_sel = 0; 
+          about_scroll = 0; 
+        }
       }
       else if (left || up) {
         menu_sel = (menu_sel - 1 + MAIN_MENU_LEN) % MAIN_MENU_LEN;
@@ -416,9 +438,32 @@ void handle_input() {
 
     case SCR_ABOUT:
       if (enter) {
-        enterDownloadMode();
+        if (about_sel == ABOUT_ITEMS_COUNT - 2) {
+          // Opção [ENTRAR FLASH MODE]
+          enterDownloadMode();
+        } else if (about_sel == ABOUT_ITEMS_COUNT - 1) {
+          // Opção [VOLTAR AO MENU]
+          current_screen = SCR_MAIN_MENU;
+          menu_sel = 2;
+        }
       }
-      else if (left || dn || up || right) {
+      else if (up) {
+        if (about_sel > 0) {
+          about_sel--;
+          if (about_sel < about_scroll) {
+            about_scroll = about_sel;
+          }
+        }
+      }
+      else if (dn) {
+        if (about_sel < ABOUT_ITEMS_COUNT - 1) {
+          about_sel++;
+          if (about_sel >= about_scroll + 4) {
+            about_scroll = about_sel - 3;
+          }
+        }
+      }
+      else if (left) {
         current_screen = SCR_MAIN_MENU;
         menu_sel = 2;
         DEBUG_SER_PRINT("[UI] Retornando de ABOUT ao Menu Principal\n");
