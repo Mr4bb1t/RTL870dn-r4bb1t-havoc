@@ -164,7 +164,7 @@ void start_deauth() {
     isDeauthing       = true;
     sent_frames       = 0;
     current_group_idx = 0;
-    led_red_on();
+    enable_rgb_attack_mode();
   }
 }
 
@@ -173,7 +173,7 @@ void stop_deauth() {
   deauth_group_count = 0;
   current_group_idx  = 0;
   last_hw_deauth_channel = -1;
-  led_red_off();
+  disable_rgb_attack_mode();
 }
 
 void run_deauth_frame() {
@@ -200,7 +200,6 @@ void run_deauth_frame() {
     yield();
   }
 
-  led_red_toggle();
   current_group_idx = (current_group_idx + 1) % deauth_group_count;
 }
 
@@ -211,12 +210,12 @@ void start_beacon() {
   isBeaconing     = true;
   beacon_frames   = 0;
   beacon_ssid_idx = 0;
-  led_red_on();
+  enable_rgb_attack_mode();
 }
 
 void stop_beacon() {
   isBeaconing = false;
-  led_red_off();
+  disable_rgb_attack_mode();
 }
 
 void run_beacon_frame() {
@@ -236,8 +235,6 @@ void run_beacon_frame() {
   // Delay curto permite drenagem segura dos descriptors na interface do Ameba
   delay(2);
   yield();
-
-  led_red_toggle();
 
   // Advance through beacon_count SSIDs (wrapping)
   beacon_ssid_idx = (beacon_ssid_idx + 1) % safe_count;

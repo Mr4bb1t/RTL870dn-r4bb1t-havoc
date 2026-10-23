@@ -190,11 +190,15 @@ static void do_scan() {
 }
 
 void handle_input() {
+  bool in_attack = (current_screen == SCR_DEAUTH_RUNNING ||
+                    current_screen == SCR_BEACON_RUNNING ||
+                    current_screen == SCR_BLE_RUNNING);
+
   bool up    = check_btn_up();
-  bool dn    = check_btn_dn();
+  bool dn    = in_attack ? false : check_btn_dn();
   bool left  = check_btn_left();
   bool right = check_btn_right();
-  bool enter = check_btn_enter();
+  bool enter = in_attack ? false : check_btn_enter();
   bool lon   = false;
 
   if (up || dn || left || right || enter) {
@@ -309,12 +313,13 @@ void handle_input() {
       break;
 
     case SCR_DEAUTH_RUNNING:
-      // Qualquer tecla de parada (ENTER, LEFT, DOWN) desarma o ataque
-      if (enter || left || dn) {
+      // Qualquer botao livre (LEFT, RIGHT, UP) ou ENTER/DOWN para o ataque
+      if (left || right || up || enter || dn) {
         stop_deauth();
         current_screen = SCR_WIFI_MENU;
         menu_sel = 0;
         wifi_menu_cur_x = 0;
+        flush_input();
       }
       break;
 
@@ -471,11 +476,12 @@ void handle_input() {
       break;
 
     case SCR_BEACON_RUNNING:
-      if (enter || dn) {
+      if (left || right || up || enter || dn) {
         stop_beacon();
         current_screen = SCR_WIFI_MENU;
         menu_sel = 1;
         wifi_menu_cur_x = 128;
+        flush_input();
       }
       break;
 
@@ -485,10 +491,11 @@ void handle_input() {
       break;
 
     case SCR_BLE_RUNNING:
-      if (enter || left || dn) {
+      if (left || right || up || enter || dn) {
         stop_ble_spam();
         current_screen = SCR_MAIN_MENU;
         menu_sel = 1;
+        flush_input();
       }
       break;
 

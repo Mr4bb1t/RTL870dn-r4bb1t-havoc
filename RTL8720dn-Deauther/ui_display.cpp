@@ -590,7 +590,7 @@ void render_deauth_confirm() {
 }
 
 void render_deauth_running() {
-  draw_header("* DEAUTH ATTACK *", "RUN");
+  draw_header("* DEAUTH ATTACK *", "< STOP");
 
   // Left Column: Meaningful Wi-Fi Link Disruption Graphic (X=2..34, Y=14..62)
   // 1. Access Point (Router) at Top Left (X=5, Y=18)
@@ -985,7 +985,7 @@ void render_ble_menu() {
 }
 
 void render_ble_running() {
-  draw_header("* BLE SPAM *", "ACTIVE");
+  draw_header("* BLE SPAM *", "< STOP");
 
   // Left: Pulsing Bluetooth animation
   display.drawXBMP(4, 16, 24, 24, anim_bluetooth_24x24[center_anim_frame % 14]);

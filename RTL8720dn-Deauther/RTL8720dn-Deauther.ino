@@ -64,8 +64,8 @@ void setup() {
   display.setContrast(220);
   DEBUG_SER_PRINT("[OK] Display.begin() concluido com sucesso!\n");
 
-  led_red_init();
-  DEBUG_SER_PRINT("[OK] LED de Status Vermelho (PA_12 / D12) configurado!\n");
+  rgb_led_init();
+  DEBUG_SER_PRINT("[OK] LED RGB de Status (R:D12, G:D11, B:D10) configurado!\n");
 
   current_screen = SCR_SPLASH;
   DEBUG_SER_PRINT("[OK] Splash animado iniciando...\n");
@@ -144,6 +144,7 @@ void setup() {
 void loop() {
   check_serial_commands();
   tick_anim();
+  tick_rgb_attack_effects();
   handle_input();
 
   if (isBeaconing && (millis() - last_beacon_ms > BEACON_INTERVAL_MS)) {
@@ -165,6 +166,7 @@ void loop() {
 
   // Desliga o LED de atividade de RF caso nenhum ataque ou varredura esteja ativo
   if (!isDeauthing && !isBeaconing && !isBleSpamming && current_screen != SCR_SCANNING) {
-    if (led_red_state) led_red_off();
+    if (rgb_attack_mode) disable_rgb_attack_mode();
+    else if (led_red_state) led_red_off();
   }
 }
