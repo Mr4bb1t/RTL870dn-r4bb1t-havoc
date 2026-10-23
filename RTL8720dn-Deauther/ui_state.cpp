@@ -173,11 +173,14 @@ static void do_scan() {
   startScan();
   uint32_t start_ms = millis();
   while (!scan_done && (millis() - start_ms < 5000)) {
+    if ((millis() / 150) % 2 == 0) led_red_on();
+    else led_red_off();
     check_serial_commands();
     tick_anim();
     render_screen();
     delay(20);
   }
+  led_red_off();
   sortScanResults();
   DEBUG_SER_PRINT("[SCAN] Varredura finalizada. Redes encontradas: ");
   DEBUG_SER_PRINT((int)scan_results.size());

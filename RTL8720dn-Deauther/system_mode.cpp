@@ -1,6 +1,33 @@
 #include "system_mode.h"
+#include "config.h"
 #include "ui_display.h"
 #include "debug.h"
+
+bool led_red_state = false;
+
+void led_red_init() {
+  pinMode(LED_PIN_RED, OUTPUT);
+  digitalWrite(LED_PIN_RED, LED_INACTIVE_LEVEL);
+  led_red_state = false;
+}
+
+void led_red_on() {
+  digitalWrite(LED_PIN_RED, LED_ACTIVE_LEVEL);
+  led_red_state = true;
+}
+
+void led_red_off() {
+  digitalWrite(LED_PIN_RED, LED_INACTIVE_LEVEL);
+  led_red_state = false;
+}
+
+void led_red_toggle() {
+  if (led_red_state) {
+    led_red_off();
+  } else {
+    led_red_on();
+  }
+}
 
 extern "C" {
   void BKUP_Set(uint32_t DwordIdx, uint32_t BitMask);
@@ -8,6 +35,7 @@ extern "C" {
 }
 
 void enterDownloadMode() {
+  led_red_on();
   DEBUG_SER_PRINT("\n=========================================\n");
   DEBUG_SER_PRINT("[SYSTEM] Entrando em UART Download Mode...\n");
   DEBUG_SER_PRINT("[SYSTEM] Aguardando gravacao via UART (LOG_TX)...\n");

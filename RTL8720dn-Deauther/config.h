@@ -21,6 +21,20 @@
 #define OLED_SDA   8  // D8 -> PA_26
 
 // =========================================================
+// Onboard Status LED (BW16 Red LED on PA_12 / D12)
+// Common Anode: LOW = ON, HIGH = OFF
+// =========================================================
+#define LED_PIN_RED        12  // D12 -> PA_12 (LED_BUILTIN_R)
+#define LED_ACTIVE_LEVEL   LOW
+#define LED_INACTIVE_LEVEL HIGH
+
+extern bool led_red_state;
+void led_red_init();
+void led_red_on();
+void led_red_off();
+void led_red_toggle();
+
+// =========================================================
 // Timing / Attack Parameters
 // =========================================================
 #define BTN_DEBOUNCE_MS 150

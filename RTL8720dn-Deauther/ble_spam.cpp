@@ -169,6 +169,7 @@ void ble_spam_next() {
   advert->startAdv();
 
   ble_pkt_sent++;
+  led_red_toggle();
 }
 
 // =========================================================
@@ -177,6 +178,7 @@ void ble_spam_next() {
 void start_ble_spam() {
   if (ble_initialized) return;
 
+  led_red_on();
   DEBUG_SER_PRINT("[BLE] Iniciando EvilAppleJuice (35 dispositivos Apple)...\n");
 
   BLE.init();
@@ -211,6 +213,7 @@ void start_ble_spam() {
 // =========================================================
 void stop_ble_spam() {
   isBleSpamming = false;
+  led_red_off();
   if (ble_initialized) {
     BLE.configAdvert()->stopAdv();
     BLE.end();

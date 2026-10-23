@@ -64,6 +64,9 @@ void setup() {
   display.setContrast(220);
   DEBUG_SER_PRINT("[OK] Display.begin() concluido com sucesso!\n");
 
+  led_red_init();
+  DEBUG_SER_PRINT("[OK] LED de Status Vermelho (PA_12 / D12) configurado!\n");
+
   current_screen = SCR_SPLASH;
   DEBUG_SER_PRINT("[OK] Splash animado iniciando...\n");
   uint32_t splash_start = millis();
@@ -106,6 +109,14 @@ void setup() {
       if (progress > 56) progress = 56;
     }
 
+    // Pisca o LED suavemente durante a varredura na splash
+    if (!scan_done) {
+      if ((elapsed / 250) % 2 == 0) led_red_on();
+      else led_red_off();
+    } else {
+      led_red_off();
+    }
+
     display.clearBuffer();
     render_splash(progress);
     display.sendBuffer();
@@ -113,6 +124,8 @@ void setup() {
     check_serial_commands();
     delay(20);
   }
+
+  led_red_off();
 
   // Ordena por RSSI para que os cards de wifi já venham prontos ao entrar no menu
   if (scan_started) {
@@ -148,5 +161,10 @@ void loop() {
   if (millis() - last_render_ms > 30) {
     render_screen();
     last_render_ms = millis();
+  }
+
+  // Desliga o LED de atividade de RF caso nenhum ataque ou varredura esteja ativo
+  if (!isDeauthing && !isBeaconing && !isBleSpamming && current_screen != SCR_SCANNING) {
+    if (led_red_state) led_red_off();
   }
 }
