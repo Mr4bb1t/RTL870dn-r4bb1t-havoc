@@ -697,37 +697,23 @@ void render_deauth_running() {
 void render_beacon_confirm() {
   draw_header("CONFIRM BEACON", "25AP");
 
-  // Scaled-down realistic lattice broadcast mast (height 18px: ty - 9 to ty +
-  // 9)
-  int tx = 13, ty = 28;
+  // Modern Clean Broadcast / Wi-Fi Beacon Icon (X=4..24, Y=18..42)
+  // Center radio source / antenna mast dot
+  display.drawDisc(14, 38, 2);
+  display.drawVLine(14, 35, 8); // antenna mast
+  display.drawHLine(11, 43, 7); // mast base
 
-  // Tower Legs & Horizontal Base
-  display.drawLine(tx - 7, ty + 9, tx, ty - 9);
-  display.drawLine(tx + 7, ty + 9, tx, ty - 9);
-  display.drawHLine(tx - 7, ty + 9, 15);
-
-  // Lattice Crossbars & Bracing
-  display.drawHLine(tx - 5, ty + 4, 11);
-  display.drawHLine(tx - 3, ty - 1, 7);
-  display.drawLine(tx - 5, ty + 4, tx + 3, ty - 1);
-  display.drawLine(tx + 5, ty + 4, tx - 3, ty - 1);
-
-  // Mast Spire & Beacon Emitter Bulb
-  display.drawVLine(tx, ty - 12, 3);
-  display.drawDisc(tx, ty - 13, 2);
-
-  // Concentric Broadcast Wave Arcs
-  display.drawCircle(tx, ty - 13, 5,
-                     U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
-  display.drawCircle(tx, ty - 13, 9,
-                     U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+  // Expanding Concentric Upper Radio Waves
+  display.drawCircle(14, 34, 5, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+  display.drawCircle(14, 34, 9, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+  display.drawCircle(14, 34, 13, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
 
   display.setFont(u8g2_font_5x7_tf);
   char buf[28];
   snprintf(buf, sizeof(buf), "SPAM %d FAKE APs", NUM_BEACON_SSIDS);
-  display.drawStr(27, 21, buf);
-  display.drawStr(27, 31, "Dual-Band 2.4G/5G");
-  display.drawStr(27, 41, "SSID Broadcast");
+  display.drawStr(32, 22, buf);
+  display.drawStr(32, 32, "Dual-Band 2.4G/5G");
+  display.drawStr(32, 42, "SSID Broadcast");
 
   // Two balanced action buttons at Y=46..60 (height 15px)
   draw_btn(10, 46, 50, 15, "CANCEL", menu_sel == 1);
@@ -742,49 +728,36 @@ void render_beacon_running() {
   snprintf(hdrbuf, sizeof(hdrbuf), "%s %d", modeTag, beacon_count);
   draw_header("* BEACON FLOOD *", hdrbuf);
 
-  // Scaled-down realistic lattice broadcast tower with expanding waves
-  int tx = 16, ty = 34;
+  // Animated Broadcast Transmitter Icon (X=4..26, Y=16..42)
+  int tx = 14, ty = 36;
+  display.drawDisc(tx, ty, 2);         // Transmitter node
+  display.drawVLine(tx, ty + 1, 6);    // Stand
+  display.drawHLine(tx - 3, ty + 7, 7);// Base
 
-  // Tower Legs & Lattice Structure
-  display.drawLine(tx - 6, ty + 9, tx, ty - 9);
-  display.drawLine(tx + 6, ty + 9, tx, ty - 9);
-  display.drawHLine(tx - 7, ty + 9, 15);
-  display.drawHLine(tx - 4, ty + 4, 9);
-  display.drawHLine(tx - 2, ty - 1, 5);
-  display.drawLine(tx - 4, ty + 4, tx + 2, ty - 1);
-  display.drawLine(tx + 4, ty + 4, tx - 2, ty - 1);
-
-  // Spire & Pulsing Emitter Bulb
-  display.drawVLine(tx, ty - 12, 3);
-  int b_pulse = (millis() / 150) % 2;
-  if (b_pulse) {
-    display.drawDisc(tx, ty - 13, 2);
-  } else {
-    display.drawCircle(tx, ty - 13, 2);
+  // Pulsing / expanding circular broadcast waves (left and right + upper)
+  int phase = (millis() / 200) % 3;
+  if (phase >= 0) {
+    display.drawCircle(tx, ty - 2, 5, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+  }
+  if (phase >= 1) {
+    display.drawCircle(tx, ty - 2, 9, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
+  }
+  if (phase >= 2) {
+    display.drawCircle(tx, ty - 2, 13, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
   }
 
-  // Continuous Expanding RF Broadcast Waves
-  int w1 = 3 + (int)(((millis()) % 900) * 12 / 900);
-  int w2 = 3 + (int)(((millis() + 450) % 900) * 12 / 900);
-  if (w1 <= 15)
-    display.drawCircle(tx, ty - 13, w1,
-                       U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
-  if (w2 <= 15)
-    display.drawCircle(tx, ty - 13, w2,
-                       U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_UPPER_LEFT);
-
-  // Right Side: Telemetry
+  // Right Side: Telemetry (X=32 to fit comfortably)
   display.setFont(u8g2_font_5x7_tf);
   char buf[28];
   snprintf(buf, sizeof(buf), "PKTS: %lu", (unsigned long)beacon_frames);
-  display.drawStr(36, 24, buf);
+  display.drawStr(32, 23, buf);
 
   char cntbuf[20];
   snprintf(cntbuf, sizeof(cntbuf), "SSIDs: %d", beacon_count);
-  display.drawStr(36, 37, cntbuf);
+  display.drawStr(32, 35, cntbuf);
 
   // Fake SSID Ticker in an inverted badge spanning lower area
-  display.drawRBox(35, 47, 91, 12, 1);
+  display.drawRBox(30, 47, 96, 12, 1);
   char ssid_buf[36];
   get_beacon_ssid(beacon_ssid_idx % beacon_count, ssid_buf, sizeof(ssid_buf));
   // Strip invisible NBSP padding for display
@@ -797,7 +770,7 @@ void render_beacon_running() {
   }
   disp_buf[dlen] = '\0';
   display.setDrawColor(0);
-  display.drawStr(39, 56, disp_buf);
+  display.drawStr(34, 56, disp_buf);
   display.setDrawColor(1);
 }
 
@@ -846,8 +819,8 @@ void render_beacon_setup() {
   if (row1sel) display.setDrawColor(1);
 
   // Row 2: Clone note (only shown in CLONE mode)
+  int marked = 0;
   if (beacon_mode == BEACON_MODE_CLONE) {
-    int marked = 0;
     for (size_t i = 0; i < scan_results.size(); i++) if (net_marked[i]) marked++;
     char note[28];
     snprintf(note, sizeof(note), "Base: %d marked AP(s)", marked);
@@ -862,8 +835,9 @@ void render_beacon_setup() {
   }
 
   // Buttons row
-  draw_btn(4,  48, 56, 13, beacon_mode == BEACON_MODE_CUSTOM ? "KEYBOARD" : "START",
-           beacon_setup_sel == 2);
+  const char* actLabel = (beacon_mode == BEACON_MODE_CUSTOM) ? "KEYBOARD" :
+                         (beacon_mode == BEACON_MODE_CLONE && marked == 0) ? "TARGETS" : "START";
+  draw_btn(4,  48, 56, 13, actLabel, beacon_setup_sel == 2);
   draw_btn(68, 48, 56, 13, "CANCEL", beacon_setup_sel == 3);
 }
 
@@ -977,15 +951,43 @@ void render_ble_menu() {
   // Right: Feature overview
   display.setFont(u8g2_font_5x7_tf);
   display.drawStr(34, 24, "EvilAppleJuice");
-  display.drawStr(34, 34, "35 devices");
+  display.drawStr(34, 34, "22 audio devices");
   display.drawStr(34, 44, "Random MAC");
 
   // Prominent Action Button
   draw_btn(10, 50, 108, 13, "INICIAR SPAM", true);
 }
 
+// ─── BLE Mode Select ─────────────────────────────────────
+// Tela de seleção: modo ALL (22 devices) vs FOCUSED (AirPods only)
+void render_ble_select() {
+  draw_header("BLE SPAM MODE", "");
+
+  display.setFont(u8g2_font_5x7_tf);
+
+  // Opção 1: ALL DEVICES
+  bool sel0 = (ble_select_sel == 0);
+  if (sel0) {
+    display.drawRBox(2, 13, 124, 23, 2);
+  } else {
+    display.drawRFrame(2, 13, 124, 23, 2);
+  }
+  draw_str_centered(22, "ALL DEVICES", sel0 ? 0 : 1);
+  draw_str_centered(32, "22 audio - cycle", sel0 ? 0 : 1);
+
+  // Opção 2: AIRPODS FOCUSED
+  bool sel1 = (ble_select_sel == 1);
+  if (sel1) {
+    display.drawRBox(2, 38, 124, 23, 2);
+  } else {
+    display.drawRFrame(2, 38, 124, 23, 2);
+  }
+  draw_str_centered(47, "AIRPODS FOCUSED", sel1 ? 0 : 1);
+  draw_str_centered(57, "max popups iOS", sel1 ? 0 : 1);
+}
+
 void render_ble_running() {
-  draw_header("* BLE SPAM *", "ACTIVE");
+  draw_header("* BLE SPAM *", ble_focused_mode ? "FOCUSED" : "ALL");
 
   // Left: Pulsing Bluetooth animation
   display.drawXBMP(4, 16, 24, 24, anim_bluetooth_24x24[center_anim_frame % 14]);
@@ -996,10 +998,13 @@ void render_ble_running() {
   snprintf(buf, sizeof(buf), "PKTS: %lu", (unsigned long)ble_pkt_sent);
   display.drawStr(34, 24, buf);
 
-  // Device index counter e.g. "DEV: 12/35"
-  char idbuf[16];
-  snprintf(idbuf, sizeof(idbuf), "DEV: %u/%u", (unsigned)(ble_spam_idx + 1),
-           (unsigned)NUM_APPLE_DEVICES);
+  // Device index counter
+  char idbuf[20];
+  if (ble_focused_mode) {
+    snprintf(idbuf, sizeof(idbuf), "DEV: AirPods x%lu", (unsigned long)ble_pkt_sent);
+  } else {
+    snprintf(idbuf, sizeof(idbuf), "DEV: %u/22", (unsigned)(ble_spam_idx + 1));
+  }
   display.drawStr(34, 34, idbuf);
 
   display.drawStr(34, 44, "TGT: iPhone/iPad");
@@ -1098,6 +1103,9 @@ void render_screen() {
     break;
   case SCR_BLE_MENU:
     render_ble_menu();
+    break;
+  case SCR_BLE_SELECT:
+    render_ble_select();
     break;
   case SCR_BLE_RUNNING:
     render_ble_running();

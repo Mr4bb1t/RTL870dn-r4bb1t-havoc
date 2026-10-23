@@ -64,6 +64,7 @@ extern const AppleDevice ALL_APPLE_DEVICES[];
 extern bool     isBleSpamming;
 extern uint32_t ble_pkt_sent;
 extern uint8_t  ble_spam_idx;
+extern bool     ble_focused_mode; // true = modo AirPods FOCUSED (só AUDIO idx 0)
 
 // =========================================================
 // API

@@ -8,6 +8,10 @@ extern int    menu_sel;
 
 // Beacon setup
 extern int  beacon_setup_sel;
+extern bool beacon_net_list_picking; // True when SCR_NET_LIST was opened from BEACON CLONE mode
+
+// BLE mode select
+extern int  ble_select_sel; // 0=ALL DEVICES, 1=AIRPODS FOCUSED
 
 // About (Device Info) scroll state
 extern int  about_sel;

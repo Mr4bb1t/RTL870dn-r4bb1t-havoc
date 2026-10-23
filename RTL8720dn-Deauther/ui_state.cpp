@@ -37,6 +37,10 @@ int    menu_sel       = 0;
 
 // ── Beacon Setup state ────────────────────────────────────
 int  beacon_setup_sel = 0;
+bool beacon_net_list_picking = false;
+
+// ── BLE Mode Select state ─────────────────────────────────
+int ble_select_sel = 1; // 0=ALL DEVICES, 1=AIRPODS FOCUSED (default: mais efetivo)
 
 // ── Phone-style On-screen Keyboard ───────────────────────
 // 3 pages: 0=lowercase, 1=UPPERCASE, 2=123/symbols
@@ -108,9 +112,6 @@ static bool check_button(ButtonTracker &btn, const char* name, bool allow_repeat
       btn.press_start  = now;
       btn.last_trigger = now;
       btn.is_repeating = false;
-      DEBUG_SER_PRINT("[BTN] ");
-      DEBUG_SER_PRINT(name);
-      DEBUG_SER_PRINT(" pressionado\n");
       return true;
     }
     return false;
@@ -126,9 +127,6 @@ static bool check_button(ButtonTracker &btn, const char* name, bool allow_repeat
     if (held >= BTN_HOLD_DELAY_MS) {
       btn.is_repeating = true;
       btn.last_trigger = now;
-      DEBUG_SER_PRINT("[BTN] ");
-      DEBUG_SER_PRINT(name);
-      DEBUG_SER_PRINT(" auto-repeat iniciado\n");
       return true;
     }
   } else {
@@ -215,14 +213,6 @@ void handle_input() {
   bool enter = check_btn_enter();
   bool lon   = false;
 
-  if (up || dn || left || right || enter) {
-    DEBUG_SER_PRINT("[UI] Tela=");
-    DEBUG_SER_PRINT((int)current_screen);
-    DEBUG_SER_PRINT(" Item=");
-    DEBUG_SER_PRINT(menu_sel);
-    DEBUG_SER_PRINT("\n");
-  }
-
   switch (current_screen) {
     case SCR_MAIN_MENU:
       if (enter) {
@@ -243,16 +233,10 @@ void handle_input() {
       else if (left || up) {
         menu_sel = (menu_sel - 1 + MAIN_MENU_LEN) % MAIN_MENU_LEN;
         trigger_arrow_left();
-        DEBUG_SER_PRINT("  -> Menu Principal: ");
-        DEBUG_SER_PRINT(MAIN_MENU[menu_sel]);
-        DEBUG_SER_PRINT("\n");
       }
       else if (right || dn) {
         menu_sel = (menu_sel + 1) % MAIN_MENU_LEN;
         trigger_arrow_right();
-        DEBUG_SER_PRINT("  -> Menu Principal: ");
-        DEBUG_SER_PRINT(MAIN_MENU[menu_sel]);
-        DEBUG_SER_PRINT("\n");
       }
       break;
 
@@ -291,7 +275,11 @@ void handle_input() {
         if (net_sel < net_scroll) net_scroll = net_sel;
       }
       if (dn) {
-        if (scan_results.empty()) { current_screen = SCR_WIFI_MENU; menu_sel = 0; break; }
+        if (scan_results.empty()) {
+          current_screen = beacon_net_list_picking ? SCR_BEACON_SETUP : SCR_WIFI_MENU;
+          menu_sel = 0;
+          break;
+        }
         if (net_sel < (int)scan_results.size() - 1) net_sel++;
         if (net_sel >= net_scroll + 4) net_scroll = net_sel - 3;
       }
@@ -303,16 +291,27 @@ void handle_input() {
           net_marked[net_sel] = !net_marked[net_sel];
         }
       }
-      // RIGHT: Avanço direto para tela de confirmação do Deauth
+      // RIGHT: Avanço para confirmação (Deauth ou Beacon Setup dependendo da origem)
       if (right || lon) {
-        current_screen = SCR_DEAUTH_CONFIRM;
-        menu_sel = 0;
+        if (beacon_net_list_picking) {
+          beacon_net_list_picking = false;
+          beacon_setup_sel = 2; // foca no botão START
+          current_screen   = SCR_BEACON_SETUP;
+        } else {
+          current_screen = SCR_DEAUTH_CONFIRM;
+          menu_sel = 0;
+        }
       }
-      // LEFT: Retorno rápido ao menu Wi-Fi
+      // LEFT: Retorno (ao Beacon Setup ou ao Menu Wi-Fi)
       if (left) {
-        current_screen = SCR_WIFI_MENU;
-        menu_sel = 0;
-        wifi_menu_cur_x = 0;
+        if (beacon_net_list_picking) {
+          beacon_net_list_picking = false;
+          current_screen   = SCR_BEACON_SETUP;
+        } else {
+          current_screen = SCR_WIFI_MENU;
+          menu_sel = 0;
+          wifi_menu_cur_x = 0;
+        }
       }
       break;
 
@@ -354,21 +353,42 @@ void handle_input() {
       break;
 
     case SCR_BEACON_SETUP:
-      // Rows: 0=mode, 1=count, 2=START, 3=CANCEL
+      // Rows: 0=mode, 1=count, 2=START/SELECT, 3=CANCEL
       if (up)   beacon_setup_sel = (beacon_setup_sel - 1 + 4) % 4;
       if (dn)   beacon_setup_sel = (beacon_setup_sel + 1) % 4;
       if (beacon_setup_sel == 0) {
         // Mode row: LEFT/RIGHT cycles through modes
         if (left)  beacon_mode = (BeaconMode)((beacon_mode - 1 + BEACON_MODE_COUNT) % BEACON_MODE_COUNT);
         if (right) beacon_mode = (BeaconMode)((beacon_mode + 1) % BEACON_MODE_COUNT);
+        if (enter && beacon_mode == BEACON_MODE_CLONE) {
+          // ENTER direto no modo CLONE abre a lista de redes para marcar os alvos
+          beacon_net_list_picking = true;
+          if (scan_results.empty()) do_scan();
+          current_screen = SCR_NET_LIST;
+          net_sel = 0;
+          net_scroll = 0;
+        }
       } else if (beacon_setup_sel == 1) {
         // Count row: LEFT/RIGHT changes quantity
         if (left)  { beacon_count -= 25; if (beacon_count < BEACON_MIN_COUNT) beacon_count = BEACON_MIN_COUNT; }
         if (right) { beacon_count += 25; if (beacon_count > BEACON_MAX_COUNT) beacon_count = BEACON_MAX_COUNT; }
       } else if (beacon_setup_sel == 2) {
         if (enter) {
-          // If CUSTOM mode, go to keyboard first
-          if (beacon_mode == BEACON_MODE_CUSTOM) {
+          if (beacon_mode == BEACON_MODE_CLONE) {
+            // No modo CLONE, se nenhuma rede foi marcada ou usuario deseja selecionar, vai para NET_LIST
+            int marked = 0;
+            for (size_t i = 0; i < scan_results.size(); i++) if (net_marked[i]) marked++;
+            if (marked == 0) {
+              beacon_net_list_picking = true;
+              if (scan_results.empty()) do_scan();
+              current_screen = SCR_NET_LIST;
+              net_sel = 0;
+              net_scroll = 0;
+            } else {
+              start_beacon();
+              current_screen = SCR_BEACON_RUNNING;
+            }
+          } else if (beacon_mode == BEACON_MODE_CUSTOM) {
             kb_page = 0; // always start on lowercase
             kb_row  = 0;
             kb_col  = 0;
@@ -501,8 +521,30 @@ void handle_input() {
       break;
 
     case SCR_BLE_MENU:
-      if (enter || right)        { start_ble_spam(); current_screen = SCR_BLE_RUNNING; }
-      else if (left || dn || up) { current_screen = SCR_MAIN_MENU; menu_sel = 1; }
+      // Redireciona direto para a tela de seleção de modo
+      if (enter || right) {
+        ble_select_sel = 1; // default FOCUSED
+        current_screen = SCR_BLE_SELECT;
+      } else if (left || dn || up) {
+        current_screen = SCR_MAIN_MENU;
+        menu_sel = 1;
+      }
+      break;
+
+    case SCR_BLE_SELECT:
+      if (left) {
+        current_screen = SCR_BLE_MENU;
+      } else if (up) {
+        ble_select_sel = (ble_select_sel - 1 + 2) % 2;
+      } else if (dn || right) {
+        ble_select_sel = (ble_select_sel + 1) % 2;
+      }
+      if (enter) {
+        // Configura modo antes de iniciar
+        ble_focused_mode = (ble_select_sel == 1);
+        start_ble_spam();
+        current_screen = SCR_BLE_RUNNING;
+      }
       break;
 
     case SCR_BLE_RUNNING:
@@ -543,7 +585,6 @@ void handle_input() {
       else if (left) {
         current_screen = SCR_MAIN_MENU;
         menu_sel = 2;
-        DEBUG_SER_PRINT("[UI] Retornando de ABOUT ao Menu Principal\n");
       }
       break;
 

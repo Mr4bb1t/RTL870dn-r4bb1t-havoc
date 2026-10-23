@@ -47,6 +47,7 @@ void render_beacon_setup();
 void render_beacon_keyboard();
 void render_beacon_running();
 void render_ble_menu();
+void render_ble_select();
 void render_ble_running();
 void render_about();
 

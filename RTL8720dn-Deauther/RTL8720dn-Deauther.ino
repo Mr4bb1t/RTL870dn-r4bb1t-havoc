@@ -141,7 +141,8 @@ void loop() {
     run_deauth_frame();
     last_deauth_ms = millis();
   }
-  if (isBleSpamming && (millis() - last_ble_spam_ms > BLE_SPAM_INTERVAL_MS)) {
+  uint32_t ble_interval = ble_focused_mode ? BLE_FOCUSED_INTERVAL_MS : BLE_SPAM_INTERVAL_MS;
+  if (isBleSpamming && (millis() - last_ble_spam_ms > ble_interval)) {
     ble_spam_next();
     last_ble_spam_ms = millis();
   }

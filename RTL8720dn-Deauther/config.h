@@ -26,9 +26,10 @@
 #define BTN_DEBOUNCE_MS        150
 #define BTN_HOLD_DELAY_MS      350   // Tempo segurando o botão antes de iniciar auto-repeat (350ms)
 #define BTN_REPEAT_INTERVAL_MS 100   // Taxa de repetição contínua enquanto segurado (100ms = 10x/segundo)
-#define BLE_SPAM_INTERVAL_MS 600    // 600ms per Apple device cycle: allows ~30 packets so iOS recognizes the accessory
-#define BEACON_INTERVAL_MS 100      // 100ms standard 802.11 beacon interval
-#define DEAUTH_INTERVAL_MS 60       // 60ms interval between deauth bursts, preventing RF lockup
+#define BLE_SPAM_INTERVAL_MS    150    // 150ms por ciclo: ~7 pacotes/dispositivo (20ms adv interval)
+#define BLE_FOCUSED_INTERVAL_MS 100    // 100ms modo AirPods-only: iguala o original ESP32
+#define BEACON_INTERVAL_MS 100      // 100ms — intervalo 802.11 padrão, funciona no RTL8720dn
+#define DEAUTH_INTERVAL_MS 60       // 60ms entre bursts — padrão original que funcionava
 #define SPLASH_DURATION_MS 2500
 #define SCAN_DURATION_MS 5000
 
@@ -60,6 +61,7 @@ enum Screen {
   SCR_BEACON_KEYBOARD,   // NEW: custom SSID keyboard
   SCR_BEACON_RUNNING,
   SCR_BLE_MENU,
+  SCR_BLE_SELECT,        // Novo: seleciona modo ALL / AIRPODS FOCUSED
   SCR_BLE_RUNNING,
   SCR_ABOUT,
 };

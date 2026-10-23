@@ -38,7 +38,7 @@ ChannelGroup deauth_groups[MAX_CHANNELS];
 int          deauth_group_count = 0;
 int          current_group_idx  = 0;
 uint32_t     sent_frames        = 0;
-int          frames_per_deauth  = 3;  // frames por chamada (sem delay bloqueante)
+int          frames_per_deauth  = 1;  // 1 frame por burst — rate limiter em wifi_tx_raw_frame garante espacamento adequado
 int          send_delay_ms      = 0;  // obsoleto, mantido por compatibilidade
 bool         isDeauthing        = false;
 
@@ -181,9 +181,12 @@ void run_deauth_frame() {
   if (last_hw_deauth_channel != g.channel) {
     wext_set_channel(WLAN0_NAME, g.channel);
     last_hw_deauth_channel = g.channel;
-    delay(2);
+    delay(5); // aguarda o hardware trocar de canal antes de injetar
   }
 
+  // Envia `frames_per_deauth` bursts por alvo — padrão original do projeto.
+  // delay(1)+yield() entre bursts garante que o RTOS de Ameba possa processar
+  // outras tasks (WiFi driver, timer ISR) sem travar o loop().
   for (int f = 0; f < frames_per_deauth; f++) {
     for (int t = 0; t < g.count; t++) {
       int idx = g.targets[t];
@@ -225,10 +228,13 @@ void run_beacon_frame() {
   int safe_count = (beacon_count > 0) ? beacon_count : 25;
   get_beacon_ssid(beacon_ssid_idx % safe_count, ssidBuf, sizeof(ssidBuf));
 
+  // yield antes de injetar: garante que o scheduler RTOS possa rodar antes do envio
+  yield();
   wifi_tx_beacon_frame(beacon_mac, broadcast_mac, ssidBuf);
   beacon_frames++;
 
-  // Delay curto permite drenagem segura dos descriptors na interface do Ameba
+  // Pausa curta apos o envio permite ao driver liberar o TX descriptor.
+  // IMPORTANTE: delay() aqui é seguro pois estamos fora do contexto do driver.
   delay(2);
   yield();
 
