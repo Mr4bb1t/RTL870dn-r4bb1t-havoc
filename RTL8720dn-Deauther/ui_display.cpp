@@ -123,6 +123,18 @@ void tick_anim() {
       wifi_menu_cur_x += step;
     }
   }
+
+  // Slide animation for lateral Games menu
+  if (current_screen == SCR_GAMES_MENU) {
+    games_menu_target_x = menu_sel * 128;
+    if (games_menu_cur_x != games_menu_target_x) {
+      int diff = games_menu_target_x - games_menu_cur_x;
+      int step = diff / 3;
+      if (step == 0)
+        step = (diff > 0) ? 1 : -1;
+      games_menu_cur_x += step;
+    }
+  }
 }
 
 void draw_corner_brackets(int x, int y, int w, int h, int len) {
@@ -286,6 +298,8 @@ void render_main_menu() {
   } else if (menu_sel == 1) {
     display.drawXBMP(40, 0, 48, 48,
                      anim_bluetooth_48x48[center_anim_frame % 14]);
+  } else if (menu_sel == 2) {
+    display.drawXBMP(40, 0, 48, 48, icon_games_48x48);
   } else {
     display.drawXBMP(40, 0, 48, 48, icon_about_48x48);
   }
@@ -296,7 +310,7 @@ void render_main_menu() {
 
   // Balanced Pagination Pills at Y=58
   for (int i = 0; i < MAIN_MENU_LEN; i++) {
-    int dot_x = 52 + i * 9;
+    int dot_x = 48 + i * 9;
     if (i == menu_sel) {
       display.drawRBox(dot_x - 1, 58, 8, 3, 1);
     } else {
@@ -690,7 +704,11 @@ void render_deauth_running() {
   display.drawStr(36, 40, ch_buf);
 
   char pkt_buf[24];
-  snprintf(pkt_buf, sizeof(pkt_buf), "PKTS: %lu", (unsigned long)sent_frames);
+  if (deauth_fail_count > 0) {
+    snprintf(pkt_buf, sizeof(pkt_buf), "PKT:%lu E:%lu", (unsigned long)sent_frames, (unsigned long)deauth_fail_count);
+  } else {
+    snprintf(pkt_buf, sizeof(pkt_buf), "PKTS: %lu", (unsigned long)sent_frames);
+  }
   display.drawStr(36, 54, pkt_buf);
 }
 
@@ -749,7 +767,11 @@ void render_beacon_running() {
   // Right Side: Telemetry (X=32 to fit comfortably)
   display.setFont(u8g2_font_5x7_tf);
   char buf[28];
-  snprintf(buf, sizeof(buf), "PKTS: %lu", (unsigned long)beacon_frames);
+  if (beacon_fail_count > 0) {
+    snprintf(buf, sizeof(buf), "PKT:%lu E:%lu", (unsigned long)beacon_frames, (unsigned long)beacon_fail_count);
+  } else {
+    snprintf(buf, sizeof(buf), "PKTS: %lu", (unsigned long)beacon_frames);
+  }
   display.drawStr(32, 23, buf);
 
   char cntbuf[20];
@@ -1109,6 +1131,21 @@ void render_screen() {
     break;
   case SCR_BLE_RUNNING:
     render_ble_running();
+    break;
+  case SCR_GAMES_MENU:
+    render_games_menu();
+    break;
+  case SCR_GAME_TETRIS:
+    render_game_tetris();
+    break;
+  case SCR_GAME_INVADERS:
+    render_game_invaders();
+    break;
+  case SCR_GAME_DOOM:
+    render_game_doom();
+    break;
+  case SCR_GAME_SNAKE:
+    render_game_snake();
     break;
   case SCR_ABOUT:
     render_about();

@@ -28,8 +28,8 @@
 #define BTN_REPEAT_INTERVAL_MS 100   // Taxa de repetição contínua enquanto segurado (100ms = 10x/segundo)
 #define BLE_SPAM_INTERVAL_MS    150    // 150ms por ciclo: ~7 pacotes/dispositivo (20ms adv interval)
 #define BLE_FOCUSED_INTERVAL_MS 100    // 100ms modo AirPods-only: iguala o original ESP32
-#define BEACON_INTERVAL_MS 100      // 100ms — intervalo 802.11 padrão, funciona no RTL8720dn
-#define DEAUTH_INTERVAL_MS 60       // 60ms entre bursts — padrão original que funcionava
+#define BEACON_INTERVAL_MS 130      // 130ms — intervalo 802.11 padrão, funciona no RTL8720dn
+#define DEAUTH_INTERVAL_MS 70       // 70ms entre envios
 #define SPLASH_DURATION_MS 2500
 #define SCAN_DURATION_MS 5000
 
@@ -63,6 +63,11 @@ enum Screen {
   SCR_BLE_MENU,
   SCR_BLE_SELECT,        // Novo: seleciona modo ALL / AIRPODS FOCUSED
   SCR_BLE_RUNNING,
+  SCR_GAMES_MENU,        // Hub / Menu de Jogos Retro
+  SCR_GAME_TETRIS,       // Jogo Tetris
+  SCR_GAME_INVADERS,     // Jogo Space Invaders
+  SCR_GAME_DOOM,         // Jogo DOOM 3D Raycaster
+  SCR_GAME_SNAKE,        // Jogo Snake Arcade
   SCR_ABOUT,
 };
 
@@ -79,10 +84,12 @@ enum BeaconMode {
 // =========================================================
 // Menu Labels (defined in ui_state.cpp)
 // =========================================================
-#define MAIN_MENU_LEN 3
+#define MAIN_MENU_LEN 4
 #define WIFI_MENU_LEN 4
+#define GAMES_MENU_LEN 5
 
 extern const char *MAIN_MENU[];
 extern const char *WIFI_MENU[];
+extern const char *GAMES_MENU[];
 
 #endif // CONFIG_H

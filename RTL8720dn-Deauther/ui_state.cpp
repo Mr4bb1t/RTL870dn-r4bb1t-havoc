@@ -9,8 +9,9 @@
 #include "ble_spam.h"
 #include "debug.h"
 #include "system_mode.h"
+#include "games.h"
 
-const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Device Info"};
+const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Retro Games", "Device Info"};
 const char* WIFI_MENU[] = {"Deauth Attack", "Beacon Flood", "Rescan WiFi", "< Back"};
 
 const AboutItem ABOUT_ITEMS[] = {
@@ -224,7 +225,13 @@ void handle_input() {
           wifi_menu_target_x = 0;
         }
         else if (menu_sel == 1) { current_screen = SCR_BLE_MENU; menu_sel = 0; }
-        else if (menu_sel == 2) { 
+        else if (menu_sel == 2) {
+          current_screen     = SCR_GAMES_MENU;
+          menu_sel           = 0;
+          games_menu_cur_x    = 0;
+          games_menu_target_x = 0;
+        }
+        else if (menu_sel == 3) { 
           current_screen = SCR_ABOUT; 
           about_sel = 0; 
           about_scroll = 0; 
@@ -563,7 +570,7 @@ void handle_input() {
         } else if (about_sel == ABOUT_ITEMS_COUNT - 1) {
           // Opção [VOLTAR AO MENU]
           current_screen = SCR_MAIN_MENU;
-          menu_sel = 2;
+          menu_sel = 3;
         }
       }
       else if (up) {
@@ -584,8 +591,53 @@ void handle_input() {
       }
       else if (left) {
         current_screen = SCR_MAIN_MENU;
-        menu_sel = 2;
+        menu_sel = 3;
       }
+      break;
+
+    case SCR_GAMES_MENU:
+      if (enter) {
+        if (menu_sel == 0) {
+          init_tetris();
+          current_screen = SCR_GAME_TETRIS;
+        } else if (menu_sel == 1) {
+          init_invaders();
+          current_screen = SCR_GAME_INVADERS;
+        } else if (menu_sel == 2) {
+          init_doom();
+          current_screen = SCR_GAME_DOOM;
+        } else if (menu_sel == 3) {
+          init_snake();
+          current_screen = SCR_GAME_SNAKE;
+        } else {
+          current_screen = SCR_MAIN_MENU;
+          menu_sel       = 2;
+        }
+      }
+      else if (left || up) {
+        menu_sel = (menu_sel - 1 + GAMES_MENU_LEN) % GAMES_MENU_LEN;
+        trigger_arrow_left();
+      }
+      else if (right || dn) {
+        menu_sel = (menu_sel + 1) % GAMES_MENU_LEN;
+        trigger_arrow_right();
+      }
+      break;
+
+    case SCR_GAME_TETRIS:
+      handle_tetris_input(up, dn, left, right, enter);
+      break;
+
+    case SCR_GAME_INVADERS:
+      handle_invaders_input(up, dn, left, right, enter);
+      break;
+
+    case SCR_GAME_DOOM:
+      handle_doom_input(up, dn, left, right, enter);
+      break;
+
+    case SCR_GAME_SNAKE:
+      handle_snake_input(up, dn, left, right, enter);
       break;
 
     default: break;

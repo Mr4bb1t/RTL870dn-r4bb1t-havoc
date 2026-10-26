@@ -50,6 +50,12 @@ extern char         beacon_custom_ssid[33];// CUSTOM mode base name (max 32 char
 // `out` must be at least 36 bytes.
 void get_beacon_ssid(int idx, char* out, size_t outLen);
 
+// ── Telemetry & Crash Diagnostic Counters ──────────────────
+extern uint32_t     deauth_fail_count;
+extern uint32_t     beacon_fail_count;
+
+void log_system_diagnostics(const char* context);
+
 // ── API ───────────────────────────────────────────────────
 void start_deauth();
 void stop_deauth();

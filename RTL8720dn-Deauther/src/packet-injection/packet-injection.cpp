@@ -1,92 +1,171 @@
 #include "packet-injection.h"
-#include "../../debug.h"
 
-/*
- * Transmits a raw 802.11 frame with a given length.
- * The frame must be valid and have a sequence number of 0 as it will be set automatically.
- * The frame check sequence is added automatically and must not be included in the length.
- * @param frame A pointer to the raw frame
- * @param size The size of the frame
-*/
-void wifi_tx_raw_frame(void* frame, size_t length) {
-  // Limitador de taxa: descarta frame se chamado antes de 8ms desde o ultimo envio.
-  // Evita saturar a fila TX do driver RTL8720dn.
-  static uint32_t last_tx_ms = 0;
-  static uint32_t dropped_rate_limit = 0;
-  static uint32_t dropped_no_mem = 0;
-  static uint32_t success_tx = 0;
-  static uint32_t last_diag_ms = 0;
+// Instancia global de telemetria
+TxTelemetry tx_telemetry = {0, 0, 0, 0, 0, TX_SUCCESS, 0, 0};
 
-  uint32_t now_ms = millis();
-  if (last_tx_ms != 0 && (now_ms - last_tx_ms) < 8) {
-    dropped_rate_limit++;
-    return;
-  }
-  last_tx_ms = now_ms;
+void reset_tx_telemetry() {
+  tx_telemetry.tx_attempted      = 0;
+  tx_telemetry.tx_succeeded      = 0;
+  tx_telemetry.tx_alloc_failures = 0;
+  tx_telemetry.tx_dump_failures  = 0;
+  tx_telemetry.tx_param_failures = 0;
+  tx_telemetry.last_error_code   = TX_SUCCESS;
+  tx_telemetry.last_dump_ret     = 0;
+  tx_telemetry.last_fail_ms      = 0;
+}
 
-  uint8_t *ptr = (uint8_t *)**(uint32_t **)(rltk_wlan_info + 0x10);
-  uint8_t *frame_control = (uint8_t *)alloc_mgtxmitframe(ptr + 0xa80);
-
-  if (frame_control != 0) {
-    update_mgntframe_attrib(ptr, frame_control + 8);
-    memset((void *)*(uint32_t *)(frame_control + 0x80), 0, 0x68);
-    uint8_t *frame_data = (uint8_t *)*(uint32_t *)(frame_control + 0x80) + 0x28;
-    memcpy(frame_data, frame, length);
-    *(uint32_t *)(frame_control + 0x14) = length;
-    *(uint32_t *)(frame_control + 0x18) = length;
-    dump_mgntframe(ptr, frame_control);
-    success_tx++;
-  } else {
-    // Alerta crítico de sistema: fila TX esgotada no hardware/driver
-    dropped_no_mem++;
-    DEBUG_SER_PRINT("[WIFI_TX] WARN: alloc_mgtxmitframe sem memoria! Fila TX cheia (dropped=");
-    DEBUG_SER_PRINT(dropped_no_mem);
-    DEBUG_SER_PRINT(")\n");
-  }
-
-  // Telemetria periódica do driver (a cada 2.5s) se houver atividade
-  if (now_ms - last_diag_ms >= 2500) {
-    last_diag_ms = now_ms;
-    DEBUG_SER_PRINT("[WIFI_TX] TX OK: ");
-    DEBUG_SER_PRINT(success_tx);
-    DEBUG_SER_PRINT(" | RateDrop: ");
-    DEBUG_SER_PRINT(dropped_rate_limit);
-    DEBUG_SER_PRINT(" | QDrop: ");
-    DEBUG_SER_PRINT(dropped_no_mem);
-    DEBUG_SER_PRINT("\n");
+const char* tx_status_str(int status) {
+  switch (status) {
+    case TX_SUCCESS:            return "OK";
+    case TX_ERR_INVALID_PARAM:  return "ERR_PARAM_INVALIDO";
+    case TX_ERR_WLAN_INFO_NULL: return "ERR_WLAN_INFO_NULO";
+    case TX_ERR_ADAPTER_NULL:   return "ERR_PADAPTER_NULO";
+    case TX_ERR_ALLOC_FRAME:    return "ERR_FILA_TX_ESGOTADA(alloc_mgtxmitframe=NULL)";
+    case TX_ERR_BUFFER_NULL:    return "ERR_PAYLOAD_BUF_NULO(+0x80=NULL)";
+    case TX_ERR_DUMP_FAILED:    return "ERR_DUMP_MGNTFRAME_FALHOU";
+    default:                    return "ERR_DESCONHECIDO";
   }
 }
 
 /*
- * Transmits a 802.11 deauth frame on the active channel
- * @param src_mac An array of bytes containing the mac address of the sender. The array has to be 6 bytes in size
- * @param dst_mac An array of bytes containing the destination mac address or FF:FF:FF:FF:FF:FF to broadcast the deauth
- * @param reason A reason code according to the 802.11 spec. Optional 
-*/
-void wifi_tx_deauth_frame(void* src_mac, void* dst_mac, uint16_t reason) {
+ * Transmite um quadro 802.11 cru com comprimento fornecido.
+ * Retorna status TxStatus para deteccao de falhas do driver.
+ */
+int wifi_tx_raw_frame(const void* frame, size_t length) {
+  tx_telemetry.tx_attempted++;
+
+  // Limitador de taxa para evitar esgotar a fila TX do RTL8720dn (igual ao código original)
+  static uint32_t last_tx_ms = 0;
+  uint32_t now_ms = millis();
+  if (last_tx_ms != 0 && (now_ms - last_tx_ms) < 8) {
+    tx_telemetry.tx_alloc_failures++;
+    tx_telemetry.last_error_code = TX_ERR_ALLOC_FRAME;
+    tx_telemetry.last_fail_ms    = millis();
+    return TX_ERR_ALLOC_FRAME;
+  }
+  last_tx_ms = now_ms;
+
+  if (frame == NULL || length == 0 || length > 1500) {
+    tx_telemetry.tx_param_failures++;
+    tx_telemetry.last_error_code = TX_ERR_INVALID_PARAM;
+    tx_telemetry.last_fail_ms    = millis();
+    DEBUG_SER_PRINT("[TX-ERR] Frame ou tamanho invalido: ptr=");
+    DEBUG_SER_PRINT((uint32_t)frame, HEX);
+    DEBUG_SER_PRINT(" len=");
+    DEBUG_SER_PRINT((uint32_t)length);
+    DEBUG_SER_PRINT("\n");
+    return TX_ERR_INVALID_PARAM;
+  }
+
+  if (rltk_wlan_info == NULL) {
+    tx_telemetry.tx_param_failures++;
+    tx_telemetry.last_error_code = TX_ERR_WLAN_INFO_NULL;
+    tx_telemetry.last_fail_ms    = millis();
+    DEBUG_SER_PRINT("[TX-ERR] rltk_wlan_info e NULL! Driver WiFi inativo.\n");
+    return TX_ERR_WLAN_INFO_NULL;
+  }
+
+  uint32_t **wlan_info_slot = (uint32_t **)(rltk_wlan_info + 0x10);
+  if (wlan_info_slot == NULL || *wlan_info_slot == NULL) {
+    tx_telemetry.tx_param_failures++;
+    tx_telemetry.last_error_code = TX_ERR_WLAN_INFO_NULL;
+    tx_telemetry.last_fail_ms    = millis();
+    DEBUG_SER_PRINT("[TX-ERR] *(rltk_wlan_info + 0x10) e NULL!\n");
+    return TX_ERR_WLAN_INFO_NULL;
+  }
+
+  uint8_t *ptr = (uint8_t *)**wlan_info_slot;
+  if (ptr == NULL) {
+    tx_telemetry.tx_param_failures++;
+    tx_telemetry.last_error_code = TX_ERR_ADAPTER_NULL;
+    tx_telemetry.last_fail_ms    = millis();
+    DEBUG_SER_PRINT("[TX-ERR] padapter (**slot) e NULL!\n");
+    return TX_ERR_ADAPTER_NULL;
+  }
+
+  uint8_t *frame_control = (uint8_t *)alloc_mgtxmitframe(ptr + 0xa80);
+  if (frame_control == NULL) {
+    // Esgotamento de descritores no anel TX — causa mais frequente de crash/trava
+    tx_telemetry.tx_alloc_failures++;
+    tx_telemetry.last_error_code = TX_ERR_ALLOC_FRAME;
+    tx_telemetry.last_fail_ms    = millis();
+    return TX_ERR_ALLOC_FRAME;
+  }
+
+  uint32_t *payload_slot = (uint32_t *)(frame_control + 0x80);
+  if (payload_slot == NULL || *payload_slot == 0) {
+    // Se o buffer interno for nulo, memset(0) causaria ARM HardFault imediato
+    tx_telemetry.tx_param_failures++;
+    tx_telemetry.last_error_code = TX_ERR_BUFFER_NULL;
+    tx_telemetry.last_fail_ms    = millis();
+    DEBUG_SER_PRINT("[TX-ERR] Buffer payload (+0x80) e NULL! HardFault evitado.\n");
+    return TX_ERR_BUFFER_NULL;
+  }
+
+  update_mgntframe_attrib(ptr, frame_control + 8);
+  memset((void *)*payload_slot, 0, 0x68);
+
+  uint8_t *frame_data = (uint8_t *)*payload_slot + 0x28;
+  memcpy(frame_data, frame, length);
+  *(uint32_t *)(frame_control + 0x14) = length;
+  *(uint32_t *)(frame_control + 0x18) = length;
+
+  int dump_ret = dump_mgntframe(ptr, frame_control);
+  tx_telemetry.last_dump_ret = dump_ret;
+
+  // Em firmwares RTL8720dn/Ameba, dump_mgntframe retorna 0 ou 1 em caso de sucesso.
+  // Apenas valores negativos indicam um erro real do driver.
+  if (dump_ret < 0) {
+    tx_telemetry.tx_dump_failures++;
+    tx_telemetry.last_error_code = TX_ERR_DUMP_FAILED;
+    tx_telemetry.last_fail_ms    = millis();
+    return TX_ERR_DUMP_FAILED;
+  }
+
+  tx_telemetry.tx_succeeded++;
+  return TX_SUCCESS;
+}
+
+/*
+ * Transmite um quadro de deautenticacao 802.11 no canal ativo
+ */
+int wifi_tx_deauth_frame(const void* src_mac, const void* dst_mac, uint16_t reason) {
+  if (src_mac == NULL || dst_mac == NULL) {
+    DEBUG_SER_PRINT("[DEAUTH-ERR] MAC nulo recebido em wifi_tx_deauth_frame!\n");
+    return TX_ERR_INVALID_PARAM;
+  }
+
   DeauthFrame frame;
   memcpy(&frame.source, src_mac, 6);
   memcpy(&frame.access_point, src_mac, 6);
   memcpy(&frame.destination, dst_mac, 6);
+  frame.sequence_number = 0;
   frame.reason = reason;
-  wifi_tx_raw_frame(&frame, sizeof(DeauthFrame));
+
+  return wifi_tx_raw_frame(&frame, sizeof(DeauthFrame));
 }
 
 /*
- * Transmits a very basic 802.11 beacon with the given ssid on the active channel
- * @param src_mac An array of bytes containing the mac address of the sender. The array has to be 6 bytes in size
- * @param dst_mac An array of bytes containing the destination mac address or FF:FF:FF:FF:FF:FF to broadcast the beacon
- * @param ssid '\0' terminated array of characters representing the SSID
-*/
-void wifi_tx_beacon_frame(void* src_mac, void* dst_mac, const char *ssid) {
+ * Transmite um beacon 802.11 com SSID no canal ativo
+ */
+int wifi_tx_beacon_frame(const void* src_mac, const void* dst_mac, const char *ssid) {
+  if (src_mac == NULL || dst_mac == NULL || ssid == NULL) {
+    DEBUG_SER_PRINT("[BEACON-ERR] Parametro nulo recebido em wifi_tx_beacon_frame!\n");
+    return TX_ERR_INVALID_PARAM;
+  }
+
   BeaconFrame frame;
   memcpy(&frame.source, src_mac, 6);
   memcpy(&frame.access_point, src_mac, 6);
   memcpy(&frame.destination, dst_mac, 6);
-  frame.ssid_length = 0; // Inicializa corretamente — original deixava como lixo de pilha
-  for (int i = 0; ssid[i] != '\0' && i < 32; i++) {
-    frame.ssid[i] = ssid[i];
+  frame.sequence_number = 0;
+  frame.ssid_length = 0;
+
+  for (int i = 0; ssid[i] != '\0' && i < 255; i++) {
+    frame.ssid[i] = (uint8_t)ssid[i];
     frame.ssid_length++;
   }
-  wifi_tx_raw_frame(&frame, 38 + frame.ssid_length);
+
+  return wifi_tx_raw_frame(&frame, 38 + frame.ssid_length);
 }
+
