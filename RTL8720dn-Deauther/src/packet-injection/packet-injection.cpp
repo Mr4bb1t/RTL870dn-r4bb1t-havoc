@@ -28,6 +28,24 @@ const char* tx_status_str(int status) {
 }
 
 /*
+ * Offset da fila de transmissao de frames de gerenciamento dentro de
+ * struct _adapter (lib_wlan.a do AmebaD Arduino core 3.1.x).
+ *
+ * Confirmado no binario instalado (3.1.7) desmontando rtw_mlme_ext.o:
+ * a funcao issue_deauth() chama alloc_mgtxmitframe(adapter + 0xae0).
+ * O valor antigo 0xa80 apontava para 0x60 bytes antes da fila real; com
+ * isso alloc_mgtxmitframe() manipulava listas/spinlocks invalidos e o
+ * firmware travava (HardFault/lockup) no primeiro frame enviado, logo
+ * apos confirmar o ataque.
+ *
+ * Se o core for trocado por uma versao com layout diferente, este valor
+ * pode ser sobrescrito via build flag (-DMGMT_TX_QUEUE_OFFSET=0x...).
+ */
+#ifndef MGMT_TX_QUEUE_OFFSET
+#define MGMT_TX_QUEUE_OFFSET 0xae0
+#endif
+
+/*
  * Transmite um quadro 802.11 cru com comprimento fornecido.
  * Retorna status TxStatus para deteccao de falhas do driver.
  */
@@ -83,7 +101,7 @@ int wifi_tx_raw_frame(const void* frame, size_t length) {
     return TX_ERR_ADAPTER_NULL;
   }
 
-  uint8_t *frame_control = (uint8_t *)alloc_mgtxmitframe(ptr + 0xa80);
+  uint8_t *frame_control = (uint8_t *)alloc_mgtxmitframe(ptr + MGMT_TX_QUEUE_OFFSET);
   if (frame_control == NULL) {
     // Esgotamento de descritores no anel TX — causa mais frequente de crash/trava
     tx_telemetry.tx_alloc_failures++;

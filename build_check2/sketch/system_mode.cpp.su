@@ -1,0 +1,4 @@
+system_mode.cpp:69:1:cpp)	0	static
+system_mode.cpp:69:1:cpp)	0	static
+system_mode.cpp:10:6:void enterDownloadMode()	8	static
+system_mode.cpp:40:6:void check_serial_commands()	16	static

@@ -1,0 +1,50 @@
+BLECharacteristic.cpp:25:1:BLECharacteristic::~BLECharacteristic()	8	static
+BLECharacteristic.cpp:32:6:void BLECharacteristic::setUUID(BLEUUID)	16	static
+BLECharacteristic.cpp:15:1:BLECharacteristic::BLECharacteristic(BLEUUID)	96	static
+BLECharacteristic.cpp:20:1:BLECharacteristic::BLECharacteristic(const char*)	160	static
+BLECharacteristic.cpp:41:9:BLEUUID BLECharacteristic::getUUID()	8	static
+BLECharacteristic.cpp:45:6:void BLECharacteristic::setBufferLen(uint16_t)	16	static
+BLECharacteristic.cpp:59:10:uint16_t BLECharacteristic::getBufferLen()	0	static
+BLECharacteristic.cpp:63:6:void BLECharacteristic::setReadProperty(bool)	0	static
+BLECharacteristic.cpp:71:6:void BLECharacteristic::setWriteProperty(bool)	0	static
+BLECharacteristic.cpp:79:6:void BLECharacteristic::setWriteNRProperty(bool)	0	static
+BLECharacteristic.cpp:87:6:void BLECharacteristic::setNotifyProperty(bool)	0	static
+BLECharacteristic.cpp:101:6:void BLECharacteristic::setIndicateProperty(bool)	0	static
+BLECharacteristic.cpp:115:6:void BLECharacteristic::setProperties(uint8_t)	0	static
+BLECharacteristic.cpp:119:9:uint8_t BLECharacteristic::getProperties()	0	static
+BLECharacteristic.cpp:124:6:void BLECharacteristic::setReadPermissions(uint32_t)	0	static
+BLECharacteristic.cpp:130:6:void BLECharacteristic::setWritePermissions(uint32_t)	0	static
+BLECharacteristic.cpp:136:6:void BLECharacteristic::setPermissions(uint32_t)	0	static
+BLECharacteristic.cpp:143:10:uint32_t BLECharacteristic::getPermissions()	0	static
+BLECharacteristic.cpp:201:6:bool BLECharacteristic::setData(uint8_t*, uint16_t)	16	static
+BLECharacteristic.cpp:179:6:bool BLECharacteristic::writeString(const char*)	16	static
+BLECharacteristic.cpp:175:6:bool BLECharacteristic::writeString(String)	16	static
+BLECharacteristic.cpp:183:6:bool BLECharacteristic::writeData8(uint8_t)	16	static
+BLECharacteristic.cpp:187:6:bool BLECharacteristic::writeData16(uint16_t)	16	static
+BLECharacteristic.cpp:191:6:bool BLECharacteristic::writeData32(uint32_t)	16	static
+BLECharacteristic.cpp:195:6:bool BLECharacteristic::writeData32(int)	16	static
+BLECharacteristic.cpp:212:10:uint16_t BLECharacteristic::getData(uint8_t*, uint16_t)	16	static
+BLECharacteristic.cpp:149:8:String BLECharacteristic::readString()	24	dynamic
+BLECharacteristic.cpp:155:9:uint8_t BLECharacteristic::readData8()	16	static
+BLECharacteristic.cpp:161:10:uint16_t BLECharacteristic::readData16()	16	static
+BLECharacteristic.cpp:167:10:uint32_t BLECharacteristic::readData32()	16	static
+BLECharacteristic.cpp:221:10:uint8_t* BLECharacteristic::getDataBuff()	0	static
+BLECharacteristic.cpp:225:10:uint16_t BLECharacteristic::getDataLen()	0	static
+BLECharacteristic.cpp:229:6:void BLECharacteristic::notify(uint8_t)	24	static
+BLECharacteristic.cpp:237:6:void BLECharacteristic::indicate(uint8_t)	24	static
+BLECharacteristic.cpp:247:6:void BLECharacteristic::setUserDescriptor(const char*)	16	static
+BLECharacteristic.cpp:256:6:void BLECharacteristic::setFormatDescriptor(uint8_t, uint8_t, uint16_t, uint16_t)	8	static
+BLECharacteristic.cpp:264:6:void BLECharacteristic::setReportRefDescriptor(uint8_t, uint8_t)	0	static
+BLECharacteristic.cpp:270:9:uint8_t BLECharacteristic::getReportRefID()	0	static
+BLECharacteristic.cpp:274:9:uint8_t BLECharacteristic::getReportRefType()	0	static
+BLECharacteristic.cpp:280:6:void BLECharacteristic::setReadCallback(void (*)(BLECharacteristic*, uint8_t))	0	static
+BLECharacteristic.cpp:284:6:void BLECharacteristic::setWriteCallback(void (*)(BLECharacteristic*, uint8_t))	0	static
+BLECharacteristic.cpp:288:6:void BLECharacteristic::setCCCDCallback(void (*)(BLECharacteristic*, uint8_t, uint16_t))	0	static
+BLECharacteristic.cpp:294:9:uint8_t BLECharacteristic::getHandleIndex()	8	static
+BLECharacteristic.cpp:301:9:uint8_t BLECharacteristic::getAttrCount()	0	static
+BLECharacteristic.cpp:321:9:uint8_t BLECharacteristic::generateAttrCharacteristicDeclaration(T_ATTRIB_APPL*, uint8_t)	24	static
+BLECharacteristic.cpp:351:9:uint8_t BLECharacteristic::generateAttrDescriptorDeclaration(T_ATTRIB_APPL*, uint8_t)	28	static
+BLECharacteristic.cpp:310:9:uint8_t BLECharacteristic::generateCharacteristicAttrTable(T_ATTRIB_APPL*, uint8_t)	24	static
+BLECharacteristic.cpp:433:14:T_APP_RESULT BLECharacteristic::charAttrReadCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, uint16_t, uint16_t*, uint8_t**)	16	static
+BLECharacteristic.cpp:458:14:T_APP_RESULT BLECharacteristic::charAttrWriteCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, T_WRITE_TYPE, uint16_t, uint8_t*, void (**)(uint8_t, T_SERVER_ID, uint16_t, uint16_t, uint8_t*))	24	static
+BLECharacteristic.cpp:494:6:void BLECharacteristic::charCccdUpdateCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, uint16_t)	24	static

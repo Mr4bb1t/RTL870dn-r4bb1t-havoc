@@ -1,0 +1,22 @@
+BLEHIDDevice.cpp:54:6:void HIDreadCB(BLECharacteristic*, uint8_t)	152	static
+BLEHIDDevice.cpp:20:6:void HIDnotifCB(BLECharacteristic*, uint8_t, uint16_t)	152	static
+BLEHIDDevice.cpp:41:6:void HIDwriteCB(BLECharacteristic*, uint8_t)	152	static
+BLEHIDDevice.cpp:67:1:BLEHIDDevice::BLEHIDDevice()	8	static
+BLEHIDDevice.cpp:71:1:BLEHIDDevice::~BLEHIDDevice()	16	static
+BLEHIDDevice.cpp:235:6:void BLEHIDDevice::setNumOutputReport(uint8_t)	0	static
+BLEHIDDevice.cpp:242:6:void BLEHIDDevice::setNumInputReport(uint8_t)	0	static
+BLEHIDDevice.cpp:249:6:void BLEHIDDevice::setReportMap(uint8_t*, uint16_t)	16	static
+BLEHIDDevice.cpp:99:6:void BLEHIDDevice::init()	24	static
+BLEHIDDevice.cpp:255:6:void BLEHIDDevice::inputReport(uint8_t, uint8_t*, uint16_t, uint8_t)	24	static
+BLEHIDDevice.cpp:263:6:void BLEHIDDevice::setOutputReportCallback(uint8_t, void (*)(BLECharacteristic*, uint8_t))	0	static
+BLEHIDDevice.cpp:267:6:void BLEHIDDevice::bootKeyboardReport(uint8_t*, uint16_t, uint8_t)	16	static
+BLEHIDDevice.cpp:272:6:void BLEHIDDevice::setHidInfo(uint16_t, uint8_t, uint8_t)	32	static
+BLEHIDDevice.cpp:279:6:void BLEHIDDevice::setBattLevel(uint8_t)	0	static
+BLEHIDDevice.cpp:283:6:void BLEHIDDevice::setPNPInfo(uint8_t, uint16_t, uint16_t, uint16_t)	16	static
+BLEHIDDevice.cpp:294:6:void BLEHIDDevice::setManufacturerString(const char*)	0	static
+BLEHIDDevice.cpp:298:6:void BLEHIDDevice::setModelString(const char*)	0	static
+BLEHIDDevice.cpp:302:13:BLEService& BLEHIDDevice::hidService()	0	static
+BLEHIDDevice.cpp:306:13:BLEService& BLEHIDDevice::devInfoService()	0	static
+BLEHIDDevice.cpp:310:13:BLEService& BLEHIDDevice::battService()	0	static
+BLEHIDDevice.cpp:312:1:cpp)	12	static
+BLEHIDDevice.cpp:312:1:cpp)	0	static

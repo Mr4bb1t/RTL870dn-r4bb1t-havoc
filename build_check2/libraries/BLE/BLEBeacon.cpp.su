@@ -1,0 +1,30 @@
+BLEBeacon.cpp:16:1:iBeacon::iBeacon()	28	static
+BLEBeacon.cpp:19:10:uint16_t iBeacon::getMajor()	0	static
+BLEBeacon.cpp:23:10:uint16_t iBeacon::getMinor()	0	static
+BLEBeacon.cpp:27:10:uint16_t iBeacon::getManufacturerId()	0	static
+BLEBeacon.cpp:31:6:void iBeacon::getUUID(uint8_t*)	4	static
+BLEBeacon.cpp:35:8:int8_t iBeacon::getRSSI()	0	static
+BLEBeacon.cpp:39:6:void iBeacon::setMajor(uint16_t)	0	static
+BLEBeacon.cpp:43:6:void iBeacon::setMinor(uint16_t)	0	static
+BLEBeacon.cpp:47:6:void iBeacon::setManufacturerId(uint16_t)	0	static
+BLEBeacon.cpp:51:6:void iBeacon::setUUID(uint8_t*)	0	static
+BLEBeacon.cpp:55:6:void iBeacon::setUUID(const char*)	88	static
+BLEBeacon.cpp:60:6:void iBeacon::setRSSI(int8_t)	0	static
+BLEBeacon.cpp:64:10:uint8_t* iBeacon::getAdvData()	0	static
+BLEBeacon.cpp:68:10:uint8_t* iBeacon::getScanRsp()	0	static
+BLEBeacon.cpp:72:1:altBeacon::altBeacon()	32	static
+BLEBeacon.cpp:75:10:uint16_t altBeacon::getMajor()	0	static
+BLEBeacon.cpp:79:10:uint16_t altBeacon::getMinor()	0	static
+BLEBeacon.cpp:83:10:uint16_t altBeacon::getManufacturerId()	0	static
+BLEBeacon.cpp:87:6:void altBeacon::getUUID(uint8_t*)	4	static
+BLEBeacon.cpp:91:8:int8_t altBeacon::getRSSI()	0	static
+BLEBeacon.cpp:95:9:uint8_t altBeacon::getRSVD()	0	static
+BLEBeacon.cpp:99:6:void altBeacon::setMajor(uint16_t)	0	static
+BLEBeacon.cpp:103:6:void altBeacon::setMinor(uint16_t)	0	static
+BLEBeacon.cpp:107:6:void altBeacon::setManufacturerId(uint16_t)	0	static
+BLEBeacon.cpp:111:6:void altBeacon::setUUID(uint8_t*)	0	static
+BLEBeacon.cpp:115:6:void altBeacon::setUUID(const char*)	88	static
+BLEBeacon.cpp:120:6:void altBeacon::setRSSI(int8_t)	0	static
+BLEBeacon.cpp:124:6:void altBeacon::setRSVD(uint8_t)	0	static
+BLEBeacon.cpp:128:10:uint8_t* altBeacon::getAdvData()	0	static
+BLEBeacon.cpp:132:10:uint8_t* altBeacon::getScanRsp()	0	static

@@ -1,0 +1,17 @@
+games.cpp:742:13:void render_doom_sprite(float, float, const uint8_t*, const uint8_t*, int16_t, int16_t, uint8_t, float)	88	static
+games.cpp:204:13:void tetris_spawn_piece()	24	static
+games.cpp:246:13:void tetris_lock_piece()	20	static
+games.cpp:1148:13:void snake_spawn_food()	32	static
+games.cpp:24:6:void render_games_menu()	104	static
+games.cpp:258:6:void init_tetris()	16	static
+games.cpp:273:6:void render_game_tetris()	96	static
+games.cpp:396:6:void init_invaders()	24	static
+games.cpp:418:6:void render_game_invaders()	112	static
+games.cpp:713:6:void init_doom()	20	static
+games.cpp:858:6:void render_game_doom()	176	static
+games.cpp:1163:6:void init_snake()	24	static
+games.cpp:1180:6:void render_game_snake()	80	static
+games.cpp:1273:6:void handle_tetris_input(bool, bool, bool, bool, bool)	48	static
+games.cpp:1311:6:void handle_invaders_input(bool, bool, bool, bool, bool)	16	static
+games.cpp:1341:6:void handle_doom_input(bool, bool, bool, bool, bool)	48	static
+games.cpp:1447:6:void handle_snake_input(bool, bool, bool, bool, bool)	16	static

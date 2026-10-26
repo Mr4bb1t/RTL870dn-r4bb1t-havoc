@@ -1,0 +1,21 @@
+BLEDevice.cpp:429:6:static void BLEDevice::BLEMainTask(void*)	48	static
+BLEDevice.cpp:67:1:BLEDevice::BLEDevice()	16	static
+BLEDevice.cpp:72:6:void BLEDevice::init()	16	static
+BLEDevice.cpp:125:6:void BLEDevice::setDeviceName(String)	16	static
+BLEDevice.cpp:136:6:void BLEDevice::setDeviceAppearance(uint16_t)	0	static
+BLEDevice.cpp:140:12:BLEAdvert* BLEDevice::configAdvert()	16	static
+BLEDevice.cpp:147:10:BLEScan* BLEDevice::configScan()	16	static
+BLEDevice.cpp:154:13:BLEConnect* BLEDevice::configConnection()	16	static
+BLEDevice.cpp:109:6:bool BLEDevice::connected(uint8_t)	24	static
+BLEDevice.cpp:161:14:BLESecurity* BLEDevice::configSecurity()	16	static
+BLEDevice.cpp:168:6:void BLEDevice::setScanCallback(void (*)(T_LE_CB_DATA*))	0	static
+BLEDevice.cpp:174:6:void BLEDevice::beginCentral(uint8_t)	32	static
+BLEDevice.cpp:232:6:void BLEDevice::beginPeripheral()	40	static
+BLEDevice.cpp:286:6:void BLEDevice::end()	32	static
+BLEDevice.cpp:94:6:void BLEDevice::deinit()	16	static
+BLEDevice.cpp:360:6:void BLEDevice::configServer(uint8_t)	8	static
+BLEDevice.cpp:370:6:void BLEDevice::configClient()	8	static
+BLEDevice.cpp:376:6:void BLEDevice::addService(BLEService&)	112	static
+BLEDevice.cpp:390:12:BLEClient* BLEDevice::addClient(uint8_t)	32	static
+BLEDevice.cpp:423:6:void BLEDevice::getLocalAddr(uint8_t (&)[6])	16	static
+BLEDevice.cpp:450:1:cpp)	16	static

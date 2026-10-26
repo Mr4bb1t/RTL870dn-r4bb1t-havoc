@@ -1,0 +1,5 @@
+packet-injection.cpp:6:6:void reset_tx_telemetry()	0	static
+packet-injection.cpp:17:13:const char* tx_status_str(int)	0	static
+packet-injection.cpp:52:5:int wifi_tx_raw_frame(const void*, size_t)	24	static
+packet-injection.cpp:150:5:int wifi_tx_deauth_frame(const void*, const void*, uint16_t)	64	static
+packet-injection.cpp:169:5:int wifi_tx_beacon_frame(const void*, const void*, const char*)	320	static

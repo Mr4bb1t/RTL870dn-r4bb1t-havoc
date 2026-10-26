@@ -1,0 +1,9 @@
+{
+  "additionalFiles": "..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..\\..\\..,..\\..\\..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..,..\\..",
+  "compiler.optimization_flags": "-O2",
+  "customBuildProperties": "",
+  "fqbn": "realtek:AmebaD:Ai-Thinker_BW16",
+  "hardwareFolders": "C:\\Users\\R4bb1t\\AppData\\Local\\Arduino15\\packages\\realtek\\hardware\\AmebaD\\3.1.7,C:\\Users\\R4bb1t\\AppData\\Local\\Arduino15\\packages\\realtek\\hardware\\AmebaD\\3.1.7",
+  "otherLibrariesFolders": "C:\\Users\\R4bb1t\\Documents\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\R4bb1t\\Downloads\\RTL870dn-r4bb1t-havoc-main\\RTL870dn-r4bb1t-havoc-main\\RTL8720dn-Deauther"
+}

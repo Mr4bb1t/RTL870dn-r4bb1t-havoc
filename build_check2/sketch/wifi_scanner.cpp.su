@@ -1,0 +1,6 @@
+wifi_scanner.cpp:67:6:void sortScanResults()	88	static
+wifi_scanner.cpp:80:6:void startScan()	24	static
+vector.tcc:407:7:) [with _Args = {const WiFiScanResult&}; _Tp = WiFiScanResult; _Alloc = std::allocator<WiFiScanResult>]	32	static
+wifi_scanner.cpp:14:14:rtw_result_t scanResultHandler(rtw_scan_handler_result_t*)	168	static
+wifi_scanner.cpp:88:1:cpp)	0	static
+wifi_scanner.cpp:88:1:cpp)	16	static

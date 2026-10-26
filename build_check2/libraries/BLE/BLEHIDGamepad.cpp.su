@@ -1,0 +1,12 @@
+BLEHIDGamepad.cpp:11:1:BLEHIDGamepad::BLEHIDGamepad()	8	static
+BLEHIDGamepad.cpp:15:6:void BLEHIDGamepad::setReportID(uint8_t)	0	static
+BLEHIDGamepad.cpp:19:6:void BLEHIDGamepad::gamepadReport(hid_gamepad_report_t*)	16	static
+BLEHIDGamepad.cpp:23:6:void BLEHIDGamepad::gamepadReport(uint16_t, uint8_t, int16_t, int16_t, int16_t, int16_t, int16_t, int16_t)	16	static
+BLEHIDGamepad.cpp:35:6:void BLEHIDGamepad::buttonPress(uint16_t)	16	static
+BLEHIDGamepad.cpp:43:6:void BLEHIDGamepad::buttonRelease(uint16_t)	16	static
+BLEHIDGamepad.cpp:51:6:void BLEHIDGamepad::buttonReleaseAll()	16	static
+BLEHIDGamepad.cpp:56:6:void BLEHIDGamepad::setHat(uint8_t)	16	static
+BLEHIDGamepad.cpp:63:6:void BLEHIDGamepad::setAxes(int16_t, int16_t, int16_t, int16_t, int16_t, int16_t)	16	static
+BLEHIDGamepad.cpp:79:6:void BLEHIDGamepad::setLeftStick(int16_t, int16_t)	24	static
+BLEHIDGamepad.cpp:87:6:void BLEHIDGamepad::setRightStick(int16_t, int16_t)	24	static
+BLEHIDGamepad.cpp:95:6:void BLEHIDGamepad::setTriggers(int16_t, int16_t)	24	static

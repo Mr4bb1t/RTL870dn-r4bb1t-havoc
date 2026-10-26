@@ -1,0 +1,11 @@
+ui_state.cpp:93:13:bool check_button(ButtonTracker&, const char*, bool)	16	static
+ui_state.cpp:144:6:void flush_input()	56	static
+ui_state.cpp:160:6:bool check_btn_up()	0	static
+ui_state.cpp:164:6:bool check_btn_dn()	0	static
+ui_state.cpp:168:6:bool check_btn_left()	0	static
+ui_state.cpp:172:6:bool check_btn_right()	0	static
+ui_state.cpp:176:6:bool check_btn_enter()	0	static
+ui_state.cpp:180:6:bool check_btn_sel_short()	0	static
+ui_state.cpp:184:6:bool check_btn_sel_long()	0	static
+ui_state.cpp:188:13:void do_scan()	16	static
+ui_state.cpp:207:6:void handle_input()	40	static

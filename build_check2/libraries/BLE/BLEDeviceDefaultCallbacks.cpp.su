@@ -1,0 +1,23 @@
+BLEDeviceDefaultCallbacks.cpp:348:6:static void BLEDevice::connParamUpdateEvtHandlerDefault(uint8_t, uint8_t, uint16_t)	16	static
+BLEDeviceDefaultCallbacks.cpp:41:14:static T_APP_RESULT BLEDevice::gapCallbackDefault(uint8_t, void*)	16	static
+BLEDeviceDefaultCallbacks.cpp:209:6:static void BLEDevice::devStateEvtHandlerPeriphDefault(T_GAP_DEV_STATE, uint16_t)	48	static
+BLEDeviceDefaultCallbacks.cpp:236:6:static void BLEDevice::devStateEvtHandlerCentralDefault(T_GAP_DEV_STATE, uint16_t)	48	static
+BLEDeviceDefaultCallbacks.cpp:259:6:static void BLEDevice::connStateEvtHandlerPeriphDefault(uint8_t, T_GAP_CONN_STATE, uint16_t)	8	static
+BLEDeviceDefaultCallbacks.cpp:298:6:static void BLEDevice::connStateEvtHandlerCentralDefault(uint8_t, T_GAP_CONN_STATE, uint16_t)	24	static
+BLEDeviceDefaultCallbacks.cpp:115:6:static void BLEDevice::gapMsgHandlerDefault(T_IO_MSG*)	32	static
+BLEDeviceDefaultCallbacks.cpp:101:6:static void BLEDevice::ioMsgHandlerDefault(T_IO_MSG)	16	static
+BLEDeviceDefaultCallbacks.cpp:344:6:static void BLEDevice::connMtuInfoEvtHandlerDefault(uint8_t, uint16_t)	0	static
+BLEDeviceDefaultCallbacks.cpp:348:6:static void BLEDevice::connParamUpdateEvtHandlerDefault(uint8_t, uint8_t, uint16_t)	0	static
+BLEDeviceDefaultCallbacks.cpp:374:6:static void BLEDevice::authenStateEvtHandlerDefault(uint8_t, uint8_t, uint16_t)	0	static
+BLEDeviceDefaultCallbacks.cpp:397:14:static T_APP_RESULT BLEDevice::appServiceCallbackDefault(T_SERVER_ID, void*)	0	static
+BLEDeviceDefaultCallbacks.cpp:427:14:static T_APP_RESULT BLEDevice::serviceAttrReadCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, uint16_t, uint16_t*, uint8_t**)	56	static
+BLEDeviceDefaultCallbacks.cpp:440:14:static T_APP_RESULT BLEDevice::serviceAttrWriteCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, T_WRITE_TYPE, uint16_t, uint8_t*, void (**)(uint8_t, T_SERVER_ID, uint16_t, uint16_t, uint8_t*))	64	static
+BLEDeviceDefaultCallbacks.cpp:454:6:static void BLEDevice::serviceCccdUpdateCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, uint16_t)	48	static
+BLEDeviceDefaultCallbacks.cpp:466:14:static T_APP_RESULT BLEDevice::appClientCallbackDefault(T_CLIENT_ID, uint8_t, void*)	0	static
+BLEDeviceDefaultCallbacks.cpp:498:6:static void BLEDevice::clientDiscoverStateCallbackDefault(uint8_t, T_DISCOVERY_STATE)	0	static
+BLEDeviceDefaultCallbacks.cpp:505:6:static void BLEDevice::clientDiscoverResultCallbackDefault(uint8_t, T_DISCOVERY_RESULT_TYPE, T_DISCOVERY_RESULT_DATA)	4	static
+BLEDeviceDefaultCallbacks.cpp:512:6:static void BLEDevice::clientReadResultCallbackDefault(uint8_t, uint16_t, uint16_t, uint16_t, uint8_t*)	24	static
+BLEDeviceDefaultCallbacks.cpp:519:6:static void BLEDevice::clientWriteResultCallbackDefault(uint8_t, T_GATT_WRITE_TYPE, uint16_t, uint16_t, uint8_t)	24	static
+BLEDeviceDefaultCallbacks.cpp:526:14:static T_APP_RESULT BLEDevice::clientNotifyIndicateCallbackDefault(uint8_t, bool, uint16_t, uint16_t, uint8_t*)	24	static
+BLEDeviceDefaultCallbacks.cpp:534:6:static void BLEDevice::clientDisconnectCallbackDefault(uint8_t)	16	static
+BLEDeviceDefaultCallbacks.cpp:541:1:cpp)	16	static

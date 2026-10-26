@@ -1,0 +1,32 @@
+U8g2lib.h:326:12:virtual size_t U8G2::write(uint8_t)	16	static
+U8g2lib.h:364:12:virtual size_t U8G2::write(const uint8_t*, size_t)	32	static
+ui_display.cpp:64:6:void trigger_arrow_left()	8	static
+ui_display.cpp:70:6:void trigger_arrow_right()	8	static
+ui_display.cpp:76:6:void tick_anim()	8	static
+ui_display.cpp:140:6:void draw_corner_brackets(int, int, int, int, int)	32	static
+ui_display.cpp:151:6:void draw_header(const char*, const char*)	24	static
+ui_display.cpp:163:6:void draw_hint(const char*, bool)	16	static
+ui_display.cpp:177:6:void draw_str_centered(int, const char*, int)	24	static
+ui_display.cpp:187:6:void draw_btn(int, int, int, int, const char*, bool)	48	static
+ui_display.cpp:203:6:void draw_signal_bars(int, int, int, int)	40	static
+ui_display.cpp:224:6:void draw_rssi_bar(int, int, int)	0	static
+ui_display.cpp:226:6:void draw_spinner(int, int)	32	static
+ui_display.cpp:232:6:void render_splash(int)	48	static
+ui_display.cpp:290:6:void render_main_menu()	40	static
+ui_display.cpp:322:6:void render_wifi_menu()	120	static
+ui_display.cpp:422:6:void render_scanning()	128	static
+ui_display.cpp:477:6:void render_net_list()	120	static
+ui_display.cpp:563:6:void render_deauth_confirm()	104	static
+ui_display.cpp:715:6:void render_beacon_confirm()	56	static
+ui_display.cpp:741:6:void render_beacon_running()	144	static
+ui_display.cpp:802:6:void render_beacon_setup()	72	static
+ui_display.cpp:874:6:void render_beacon_keyboard()	88	static
+ui_display.cpp:967:6:void render_ble_menu()	24	static
+ui_display.cpp:985:6:void render_ble_select()	24	static
+ui_display.cpp:1011:6:void render_ble_running()	120	static
+ui_display.cpp:1043:6:void render_about()	96	static
+vector.tcc:407:7:) [with _Args = {int}; _Tp = int; _Alloc = std::allocator<int>]	32	static
+ui_display.cpp:606:6:void render_deauth_running()	128	static
+ui_display.cpp:1090:6:void render_screen()	8	static
+ui_display.cpp:1157:1:cpp)	16	static
+ui_display.cpp:18:20:uint8_t u8x8_byte_ameba_hw_i2c(u8x8_t*, uint8_t, uint8_t, void*)	8	static

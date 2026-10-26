@@ -1,0 +1,17 @@
+BLEClient.cpp:14:1:BLEClient::BLEClient()	16	static
+BLEClient.cpp:17:1:BLEClient::~BLEClient()	24	static
+BLEClient.cpp:27:6:bool BLEClient::connected()	0	static
+BLEClient.cpp:31:6:void BLEClient::discoverServices()	8	static
+BLEClient.cpp:48:6:bool BLEClient::discoveryDone()	0	static
+BLEClient.cpp:52:6:void BLEClient::printServices()	48	static
+BLEClient.cpp:85:19:BLERemoteService* BLEClient::getService(BLEUUID)	24	static
+BLEClient.cpp:81:19:BLERemoteService* BLEClient::getService(const char*)	160	static
+BLEClient.cpp:102:9:uint8_t BLEClient::getConnId()	0	static
+BLEClient.cpp:106:13:T_CLIENT_ID BLEClient::getClientId()	0	static
+BLEClient.cpp:110:6:void BLEClient::setDisconnectCallback(void (*)(BLEClient*))	0	static
+BLEClient.cpp:114:6:void BLEClient::clientDiscoverStateCallbackDefault(uint8_t, T_DISCOVERY_STATE)	8	static
+BLEClient.cpp:170:6:void BLEClient::clientDiscoverResultCallbackDefault(uint8_t, T_DISCOVERY_RESULT_TYPE, T_DISCOVERY_RESULT_DATA)	248	static
+BLEClient.cpp:304:6:void BLEClient::clientReadResultCallbackDefault(uint8_t, uint16_t, uint16_t, uint16_t, uint8_t*)	20	static
+BLEClient.cpp:318:6:void BLEClient::clientWriteResultCallbackDefault(uint8_t, T_GATT_WRITE_TYPE, uint16_t, uint16_t, uint8_t)	20	static
+BLEClient.cpp:332:14:T_APP_RESULT BLEClient::clientNotifyIndicateCallbackDefault(uint8_t, bool, uint16_t, uint16_t, uint8_t*)	24	static
+BLEClient.cpp:348:6:void BLEClient::clientDisconnectCallbackDefault(uint8_t)	24	static

@@ -1,0 +1,11 @@
+BLEAdvert.cpp:24:1:BLEAdvert::BLEAdvert()	40	static
+BLEAdvert.cpp:27:6:void BLEAdvert::setAdvType(uint8_t)	0	static
+BLEAdvert.cpp:33:6:void BLEAdvert::setMinInterval(uint16_t)	0	static
+BLEAdvert.cpp:39:6:void BLEAdvert::setMaxInterval(uint16_t)	0	static
+BLEAdvert.cpp:45:6:void BLEAdvert::setAdvData(BLEAdvertData)	16	static
+BLEAdvert.cpp:50:6:void BLEAdvert::setScanRspData(BLEAdvertData)	16	static
+BLEAdvert.cpp:55:6:void BLEAdvert::setAdvData(uint8_t*, uint8_t)	16	static
+BLEAdvert.cpp:62:6:void BLEAdvert::setScanRspData(uint8_t*, uint8_t)	16	static
+BLEAdvert.cpp:69:6:void BLEAdvert::updateAdvertParams()	8	static
+BLEAdvert.cpp:87:6:void BLEAdvert::startAdv()	0	static
+BLEAdvert.cpp:91:6:void BLEAdvert::stopAdv()	0	static

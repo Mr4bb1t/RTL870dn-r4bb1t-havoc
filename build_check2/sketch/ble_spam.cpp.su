@@ -1,0 +1,5 @@
+ble_spam.cpp:142:13:bool adv_wait_idle(uint32_t)	24	static
+ble_spam.cpp:94:16:uint8_t generateApplePacket(const AppleDevice&, uint8_t*)	56	static
+ble_spam.cpp:191:6:void ble_spam_next()	80	static
+ble_spam.cpp:264:6:void start_ble_spam()	56	static
+ble_spam.cpp:305:6:void stop_ble_spam()	16	static

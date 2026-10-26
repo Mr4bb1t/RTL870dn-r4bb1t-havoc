@@ -1,0 +1,6 @@
+BLEAddr.cpp:16:1:BLEAddr::BLEAddr()	0	static
+BLEAddr.cpp:19:1:BLEAddr::BLEAddr(uint8_t (&)[6])	4	static
+BLEAddr.cpp:28:1:BLEAddr::BLEAddr(const char*)	24	static
+BLEAddr.cpp:54:13:const char* BLEAddr::str()	40	static
+BLEAddr.cpp:59:10:uint8_t* BLEAddr::data()	0	static
+BLEAddr.cpp:63:6:bool BLEAddr::operator==(const BLEAddr&)	8	static
