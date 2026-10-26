@@ -133,12 +133,24 @@ void loop() {
   tick_anim();
   handle_input();
 
-  if (isBeaconing && (millis() - last_beacon_ms > BEACON_INTERVAL_MS)) {
-    run_beacon_frame();
+  // "Arma" o timer no início de cada ataque: sem isso last_*_ms ainda vale
+  // 0 e o primeiro frame sairia no mesmo ciclo do start, antes do primeiro
+  // render da tela de ataque (a tela de confirmação ficava congelada).
+  if (isBeaconing) {
+    if (millis() - last_beacon_ms > BEACON_INTERVAL_MS) {
+      run_beacon_frame();
+      last_beacon_ms = millis();
+    }
+  } else {
     last_beacon_ms = millis();
   }
-  if (isDeauthing && (millis() - last_deauth_ms > DEAUTH_INTERVAL_MS)) {
-    run_deauth_frame();
+
+  if (isDeauthing) {
+    if (millis() - last_deauth_ms > DEAUTH_INTERVAL_MS) {
+      run_deauth_frame();
+      last_deauth_ms = millis();
+    }
+  } else {
     last_deauth_ms = millis();
   }
   uint32_t ble_interval = ble_focused_mode ? BLE_FOCUSED_INTERVAL_MS : BLE_SPAM_INTERVAL_MS;

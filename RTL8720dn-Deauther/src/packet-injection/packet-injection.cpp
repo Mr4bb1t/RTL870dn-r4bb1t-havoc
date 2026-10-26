@@ -29,20 +29,53 @@ const char* tx_status_str(int status) {
 
 /*
  * Offset da fila de transmissao de frames de gerenciamento dentro de
- * struct _adapter (lib_wlan.a do AmebaD Arduino core 3.1.x).
+ * struct _adapter (lib_wlan.a do AmebaD Arduino core).
  *
- * Confirmado no binario instalado (3.1.7) desmontando rtw_mlme_ext.o:
- * a funcao issue_deauth() chama alloc_mgtxmitframe(adapter + 0xae0).
- * O valor antigo 0xa80 apontava para 0x60 bytes antes da fila real; com
- * isso alloc_mgtxmitframe() manipulava listas/spinlocks invalidos e o
- * firmware travava (HardFault/lockup) no primeiro frame enviado, logo
- * apos confirmar o ataque.
+ * Valor confirmado por disassembly do core 3.1.9 instalado:
+ *   arm-none-eabi-objdump -d rtw_mlme_ext.o
+ * Todas as chamadas de alloc_mgtxmitframe() usam adapter + 0xa80:
+ *   issue_deauth:   add.w r0, r0, #2688  ; 0xa80
+ *   issue_beacon:   add.w r0, r5, #2688  ; 0xa80
+ *   issue_probersp: add.w r0, r0, #2688  ; 0xa80
  *
- * Se o core for trocado por uma versao com layout diferente, este valor
- * pode ser sobrescrito via build flag (-DMGMT_TX_QUEUE_OFFSET=0x...).
+ * ATENCAO: uma revisao anterior usou 0xae0 (0x60 bytes DEPOIS da fila
+ * real). Nesse caso alloc_mgtxmitframe() nao devolve NULL — devolve um
+ * ponteiro invalido — e o primeiro frame corrompe a memoria do driver:
+ * o firmware reseta/trava no instante em que o ataque inicia, antes
+ * mesmo de redesenhar a tela. Deauth e beacon quebram juntos porque
+ * compartilham este caminho de TX.
+ *
+ * Se o core for trocado por uma versao com layout diferente, confirme o
+ * offset no disassembly e sobrescreva via
+ * build flag: -DMGMT_TX_QUEUE_OFFSET=0x...
  */
+// ############################################################################
+// #                                                                          #
+// #   ☠  N A O   M E X A   N E S T E   V A L O R   ☠                        #
+// #                                                                          #
+// #   Isto NAO e um "numero magico" para ser ajustado no chute.              #
+// #   0xa80 e o offset da fila mgnt_xmit dentro de struct _adapter,          #
+// #   verificado no disassembly do core (3.1.9):                             #
+// #       issue_deauth   -> add.w r0, r0, #2688                              #
+// #       issue_beacon   -> add.w r5, r5, #2688                              #
+// #       issue_probersp -> add.w r0, r0, #2688                              #
+// #                                                                          #
+// #   Se alguem "corrigir" para 0xae0 (ou qualquer outro valor):             #
+// #   alloc_mgtxmitframe() devolve um ponteiro INVALIDO (nao NULL), o        #
+// #   primeiro frame sobrescreve a memoria do driver, o chip RESETA e o      #
+// #   ataque morre antes de desenhar a tela. Isso JA aconteceu uma vez e     #
+// #   queimou horas de diagnostico — deauth e beacon caem juntos, e o log    #
+// #   parece um problema de UI/tela quando na verdade e corrupcao de memoria.#
+// #                                                                          #
+// #   Mexeu? Vai quebrar. Nao existe "so um teste rapidinho".                #
+// #   Precisa mesmo mudar? Confirme no binario do core com:                  #
+// #       arm-none-eabi-objdump -d rtw_mlme_ext.o | grep 2688                #
+// #   e sobrescreva apenas via build flag -DMGMT_TX_QUEUE_OFFSET=0x...,      #
+// #   NUNCA editando este #define.                                           #
+// #                                                                          #
+// ############################################################################
 #ifndef MGMT_TX_QUEUE_OFFSET
-#define MGMT_TX_QUEUE_OFFSET 0xae0
+#define MGMT_TX_QUEUE_OFFSET 0xa80  // ☠ NAO TOQUE — ver o mural acima antes de "otimizar" ☠
 #endif
 
 /*

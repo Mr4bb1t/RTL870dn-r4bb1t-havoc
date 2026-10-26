@@ -53,6 +53,19 @@ BeaconMode   beacon_mode           = BEACON_MODE_RANDOM;
 int          beacon_count          = 25;         // default: 25 SSIDs
 char         beacon_custom_ssid[33]= "R4BB1T";   // default custom name
 
+// ── Beacon channel hopping (mesma mecânica do ghost group do deauth) ──
+// O anel de TX de gerenciamento do RTL8720 satura em ~33 descritores
+// quando o rádio fica preso em um único canal — é exatamente o diagnóstico
+// que originou o "ghost group" do deauth. No beacon o rádio nunca trocava
+// de canal, então após poucos frames o alloc_mgtxmitframe() devolvia NULL
+// e o firmware travava. Aqui a sintonia alterna a cada slot, esvaziando o
+// anel antes que ele chegue ao limite.
+static uint8_t  beacon_hop_channel       = 11;   // canal alternado (definido em start_beacon)
+static int      last_hw_beacon_channel   = -1;
+static bool     beacon_hop_slot          = false;
+static uint32_t beacon_consec_fail       = 0;
+static char     beacon_last_ssid[36]     = {0};
+
 // ── get_beacon_ssid ───────────────────────────────────────
 // SSID uniqueness strategy (safe, 802.11 max = 32 bytes):
 //
@@ -91,7 +104,13 @@ void get_beacon_ssid(int idx, char* out, size_t outLen) {
         for (int i = 0; i < (int)scan_results.size(); i++) pool[poolSz++] = i;
       if (poolSz > 0) {
         int netIdx = pool[idx % poolSz];
-        scan_results[netIdx].ssid.substring(0, 32).toCharArray(cloneBase, sizeof(cloneBase));
+        // Evita String::substring() (aloca no heap a cada render/envio):
+        // copia direto do buffer interno, truncando em 32 bytes.
+        const String& cloneSsid = scan_results[netIdx].ssid;
+        size_t clen = cloneSsid.length();
+        if (clen > (size_t)32) clen = 32;
+        memcpy(cloneBase, cloneSsid.c_str(), clen);
+        cloneBase[clen] = '\0';
         base = cloneBase;
       } else {
         base   = "Network";
@@ -393,15 +412,35 @@ void start_beacon() {
   reset_tx_telemetry();
   log_system_diagnostics("START_BEACON");
 
-  int ch_res = wext_set_channel(WLAN0_NAME, 1);
+  // Canal primário + canal de alternância (mesmo esquema do ghost group
+  // do deauth: sempre dentro de 1-11, seguro FCC/ANATEL).
+  uint8_t primary_ch = BEACON_CHANNEL;
+#if BEACON_CHANNEL_HOP
+  beacon_hop_channel = (uint8_t)ghost_channel_for(primary_ch);
+#else
+  beacon_hop_channel = primary_ch;   // hopping desligado
+#endif
+  last_hw_beacon_channel = -1;
+  beacon_hop_slot        = false;
+  beacon_consec_fail     = 0;
+  beacon_last_ssid[0]    = '\0';
+
+  int ch_res = wext_set_channel(WLAN0_NAME, primary_ch);
   uint8_t verified_ch = 0;
   wext_get_channel(WLAN0_NAME, &verified_ch);
-  DEBUG_SER_PRINT("[BEACON] Canal configurado: 1 -> wext_res=");
+  DEBUG_SER_PRINT("[BEACON] Canal configurado: ");
+  DEBUG_SER_PRINT((int)primary_ch);
+  DEBUG_SER_PRINT(" -> wext_res=");
   DEBUG_SER_PRINT(ch_res);
   DEBUG_SER_PRINT(" (hw_ch=");
   DEBUG_SER_PRINT((int)verified_ch);
-  DEBUG_SER_PRINT(")\n");
-  delay(5);
+  DEBUG_SER_PRINT(") | Canal alternado: ");
+  DEBUG_SER_PRINT((int)beacon_hop_channel);
+  DEBUG_SER_PRINT("\n");
+  if (ch_res == 0 && verified_ch == primary_ch) {
+    last_hw_beacon_channel = primary_ch;
+  }
+  delay(15);
 
   const char* mode_str = (beacon_mode == BEACON_MODE_RANDOM) ? "RANDOM" :
                          (beacon_mode == BEACON_MODE_CLONE)  ? "CLONE" : "CUSTOM";
@@ -434,49 +473,116 @@ void stop_beacon() {
 
   isBeaconing        = false;
   beacon_fail_count  = 0;
+  beacon_consec_fail = 0;
+  beacon_hop_slot    = false;
+  last_hw_beacon_channel = -1;
+}
+
+// MAC estável por índice de SSID (mesma lógica do deauth, que reaproveita
+// o BSSID real do alvo em todos os frames). Trocar de MAC a cada pacote
+// obrigava o driver a refazer o caminho de TX/peer constantemente.
+static void beacon_mac_for_index(int idx, uint8_t mac[6]) {
+  mac[0] = 0x02;                                 // locally administered, unicast
+  mac[1] = 0xBB;                                 // prefixo fixo (R4BB1T)
+  mac[2] = 0xCC;
+  mac[3] = (uint8_t)(idx & 0xFF);
+  mac[4] = (uint8_t)((idx >> 8) & 0xFF);
+  mac[5] = (uint8_t)(0x5A ^ (uint8_t)idx);
+}
+
+// Monta e injeta um único beacon. Retorna o TxStatus do driver.
+static int beacon_send_one(int idx) {
+  beacon_mac_for_index(idx, beacon_mac);
+  get_beacon_ssid(idx, beacon_last_ssid, sizeof(beacon_last_ssid));
+  yield();
+  return wifi_tx_beacon_frame(beacon_mac, broadcast_mac, beacon_last_ssid);
 }
 
 void run_beacon_frame() {
   if (!isBeaconing) return;
 
-  // Randomize last 3 bytes of MAC for each frame
-  for (int i = 3; i < 6; i++) beacon_mac[i] = random(0, 256);
+  int safe_count = (beacon_count > 0) ? beacon_count : NUM_BEACON_SSIDS;
 
-  // Build unique SSID for current index (max 36 bytes: 32 base + idx*2 NBSP)
-  char ssidBuf[64];
-  int safe_count = (beacon_count > 0) ? beacon_count : 25;
-  get_beacon_ssid(beacon_ssid_idx % safe_count, ssidBuf, sizeof(ssidBuf));
-
-  // yield antes de injetar: garante que o scheduler RTOS possa rodar antes do envio
-  yield();
-  int tx_res = wifi_tx_beacon_frame(beacon_mac, broadcast_mac, ssidBuf);
-  if (tx_res == TX_SUCCESS) {
-    beacon_frames++;
-  } else {
-    beacon_fail_count++;
-    DEBUG_SER_PRINT("[BEACON-FAIL] Cod=");
-    DEBUG_SER_PRINT(tx_res);
-    DEBUG_SER_PRINT(" (");
-    DEBUG_SER_PRINT(tx_status_str(tx_res));
-    DEBUG_SER_PRINT(") dump_ret=");
-    DEBUG_SER_PRINT(tx_telemetry.last_dump_ret);
-    DEBUG_SER_PRINT(" SSID='");
-    DEBUG_SER_PRINT(ssidBuf);
-    DEBUG_SER_PRINT("' Heap=");
-    DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
-    DEBUG_SER_PRINT(" B\n");
-
-    if (tx_res == TX_ERR_ALLOC_FRAME) {
-      delay(6);
+  // ── Sintonia do slot (canal primário <-> canal alternado) ─────────────
+  // Idêntico ao deauth: a troca de canal drena o anel de TX de
+  // gerenciamento antes que ele chegue ao limite de ~33 descritores.
+  int target_ch = beacon_hop_slot ? (int)beacon_hop_channel : (int)BEACON_CHANNEL;
+  if (last_hw_beacon_channel != target_ch) {
+    int ch_ret = wext_set_channel(WLAN0_NAME, target_ch);
+    uint8_t verified_ch = 0;
+    wext_get_channel(WLAN0_NAME, &verified_ch);
+    if (ch_ret != 0 || verified_ch != target_ch) {
+      DEBUG_SER_PRINT("[BEACON-HW-ERR] Falha mudanca canal ");
+      DEBUG_SER_PRINT(target_ch);
+      DEBUG_SER_PRINT(" (wext ret=");
+      DEBUG_SER_PRINT(ch_ret);
+      DEBUG_SER_PRINT(", hw_ch=");
+      DEBUG_SER_PRINT((int)verified_ch);
+      DEBUG_SER_PRINT(")\n");
     }
+    last_hw_beacon_channel = target_ch;
+    delay(15);
   }
 
-  // Pausa curta apos o envio permite ao driver liberar o TX descriptor.
-  delay(10);
-  yield();
+  // ── Rajada curta por slot ────────────────────────────────────────────
+  // O deauth envia 1 frame por alvo e devolve o controle ao scheduler;
+  // aqui o mesmo pacing evita encher a fila de uma vez.
+  for (int n = 0; n < BEACON_FRAMES_PER_SLOT; n++) {
+    int idx     = beacon_ssid_idx % safe_count;
+    int tx_res  = beacon_send_one(idx);
 
-  // Advance through beacon_count SSIDs (wrapping)
-  beacon_ssid_idx = (beacon_ssid_idx + 1) % safe_count;
+    if (tx_res == TX_SUCCESS) {
+      beacon_frames++;
+      beacon_consec_fail = 0;
+      beacon_ssid_idx    = (beacon_ssid_idx + 1) % safe_count;
+    } else {
+      beacon_fail_count++;
+      beacon_consec_fail++;
+      // Em rajada de falhas o log serial (com flush) pesa mais que o
+      // próprio driver — imprime só o início e amostras da sequência.
+      if (beacon_consec_fail <= 3 || (beacon_consec_fail % 20) == 0) {
+        DEBUG_SER_PRINT("[BEACON-FAIL] Cod=");
+        DEBUG_SER_PRINT(tx_res);
+        DEBUG_SER_PRINT(" (");
+        DEBUG_SER_PRINT(tx_status_str(tx_res));
+        DEBUG_SER_PRINT(") dump_ret=");
+        DEBUG_SER_PRINT(tx_telemetry.last_dump_ret);
+        DEBUG_SER_PRINT(" SSID='");
+        DEBUG_SER_PRINT(beacon_last_ssid);
+        DEBUG_SER_PRINT("' Heap=");
+        DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
+        DEBUG_SER_PRINT(" B\n");
+      }
+
+      if (tx_res == TX_ERR_ALLOC_FRAME) {
+        // Anel cheio: invalida a sintonia para forçar set_channel no
+        // próximo slot (drenagem) e não insiste na mesma rajada.
+        last_hw_beacon_channel = -1;
+        delay(6);
+        break;
+      }
+      beacon_ssid_idx = (beacon_ssid_idx + 1) % safe_count;
+    }
+
+    delay(10);
+    yield();
+  }
+
+  // Pausa pós-slot igual à do deauth (dá tempo ao driver de liberar o
+  // descritor) e alterna o canal para o próximo slot.
+  delay(8);
+  yield();
+  beacon_hop_slot = !beacon_hop_slot;
+
+  // Trava de segurança: se nem a troca de canal devolveu descritores,
+  // interrompe o ataque antes de o firmware travar de vez.
+  if (beacon_consec_fail >= BEACON_MAX_CONSEC_FAIL) {
+    DEBUG_SER_PRINT("[BEACON-WARN] ");
+    DEBUG_SER_PRINT(beacon_consec_fail);
+    DEBUG_SER_PRINT(" falhas consecutivas - anel TX nao drenou. Ataque interrompido.\n");
+    stop_beacon();
+    return;
+  }
 
   // Telemetria periodica a cada 2000ms
   if (millis() - last_beacon_stat_ms >= 2000) {
@@ -493,8 +599,10 @@ void run_beacon_frame() {
     DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
     DEBUG_SER_PRINT(" B (Min=");
     DEBUG_SER_PRINT((uint32_t)xPortGetMinimumEverFreeHeapSize());
-    DEBUG_SER_PRINT(" B) | Ultimo SSID='");
-    DEBUG_SER_PRINT(ssidBuf);
+    DEBUG_SER_PRINT(" B) | Canal=");
+    DEBUG_SER_PRINT(last_hw_beacon_channel);
+    DEBUG_SER_PRINT(" | Ultimo SSID='");
+    DEBUG_SER_PRINT(beacon_last_ssid);
     DEBUG_SER_PRINT("'\n");
   }
 }

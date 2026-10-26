@@ -781,7 +781,7 @@ void render_beacon_running() {
   // Fake SSID Ticker in an inverted badge spanning lower area
   display.drawRBox(30, 47, 96, 12, 1);
   char ssid_buf[36];
-  get_beacon_ssid(beacon_ssid_idx % beacon_count, ssid_buf, sizeof(ssid_buf));
+  get_beacon_ssid(beacon_ssid_idx % (beacon_count > 0 ? beacon_count : 1), ssid_buf, sizeof(ssid_buf));
   // Strip invisible NBSP padding for display
   char disp_buf[17];
   int dlen = 0;

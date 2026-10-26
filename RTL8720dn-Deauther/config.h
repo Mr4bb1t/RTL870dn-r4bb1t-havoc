@@ -30,6 +30,14 @@
 #define BLE_FOCUSED_INTERVAL_MS 100    // 100ms modo AirPods-only: iguala o original ESP32
 #define BEACON_INTERVAL_MS 130      // 130ms — intervalo 802.11 padrão, funciona no RTL8720dn
 #define DEAUTH_INTERVAL_MS 70       // 70ms entre envios
+
+// Beacon flood: replica a mecânica de canais do deauth (grupo fantasma).
+// O rádio nunca fica preso em um canal só, então o anel de TX de
+// gerenciamento do RTL8720 é drenado periodicamente.
+#define BEACON_CHANNEL           1   // canal primário do flood
+#define BEACON_CHANNEL_HOP       1   // 1 = alterna com canal de escape; 0 = só canal primário
+#define BEACON_FRAMES_PER_SLOT   2   // beacons por slot de canal (rajada curta)
+#define BEACON_MAX_CONSEC_FAIL 120   // auto-stop se o anel de TX não drenar
 #define SPLASH_DURATION_MS 2500
 #define SCAN_DURATION_MS 5000
 

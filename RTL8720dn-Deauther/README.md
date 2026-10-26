@@ -132,6 +132,12 @@ Injeta continuamente quadros de anúncio de rede (Beacons) no ar, criando dezena
    - O campo de tamanho do *IE 0 (SSID)* do padrão IEEE 802.11 possui 1 byte, permitindo no máximo 32 octetos.
    - O firmware impõe truncamento estrito em 32 bytes em todas as rotinas (`snprintf` e checagem de limites), eliminando corrupção de memória e congelamento de transmissão durante ciclos longos de pacotes.
 
+5. **Drenagem do Anel de TX (Channel Hopping):**
+   - O anel de descritores de gerenciamento do RTL8720DN satura em ~33 quadros quando o rádio permanece preso em um único canal, fazendo `alloc_mgtxmitframe()` retornar `NULL` e travando o firmware após poucos pacotes.
+   - O flood alterna a sintonia a cada slot entre o canal primário (`1`) e um canal de escape (`11`, mesma lógica do *ghost group* do deauth), o que esvazia o anel periodicamente e mantém a transmissão estável por tempo indefinido.
+   - Cada slot envia uma rajada curta (`BEACON_FRAMES_PER_SLOT`) com `delay(10)` + `yield()` entre quadros, e qualquer falha de alocação força uma re-sintonia imediata no slot seguinte. Após `BEACON_MAX_CONSEC_FAIL` falhas consecutivas o ataque é interrompido para proteger o firmware.
+   - O endereço MAC é derivado deterministicamente do índice do SSID (bit *Locally Administered* ativo), reutilizando o mesmo BSSID para o mesmo SSID falso — como o deauth faz com o BSSID real do alvo.
+
 ---
 
 ### 4.4 Disparo de Pacotes Bluetooth Low Energy (Apple BLE Proximity Spam)
