@@ -774,8 +774,12 @@ void render_beacon_running() {
   }
   display.drawStr(32, 23, buf);
 
-  char cntbuf[20];
-  snprintf(cntbuf, sizeof(cntbuf), "SSIDs: %d", beacon_count);
+  char cntbuf[24];
+  if (beacon_round_ms > 0) {
+    snprintf(cntbuf, sizeof(cntbuf), "APs:%d %lums", beacon_count, (unsigned long)beacon_round_ms);
+  } else {
+    snprintf(cntbuf, sizeof(cntbuf), "APs:%d ---", beacon_count);
+  }
   display.drawStr(32, 35, cntbuf);
 
   // Fake SSID Ticker in an inverted badge spanning lower area

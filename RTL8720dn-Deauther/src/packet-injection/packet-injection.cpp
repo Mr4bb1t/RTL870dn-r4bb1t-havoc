@@ -1,7 +1,7 @@
 #include "packet-injection.h"
 
 // Instancia global de telemetria
-TxTelemetry tx_telemetry = {0, 0, 0, 0, 0, TX_SUCCESS, 0, 0};
+TxTelemetry tx_telemetry = {};
 
 void reset_tx_telemetry() {
   tx_telemetry.tx_attempted      = 0;
@@ -12,6 +12,7 @@ void reset_tx_telemetry() {
   tx_telemetry.last_error_code   = TX_SUCCESS;
   tx_telemetry.last_dump_ret     = 0;
   tx_telemetry.last_fail_ms      = 0;
+  tx_telemetry.tx_rate_limited   = 0;
 }
 
 const char* tx_status_str(int status) {
@@ -23,6 +24,7 @@ const char* tx_status_str(int status) {
     case TX_ERR_ALLOC_FRAME:    return "ERR_FILA_TX_ESGOTADA(alloc_mgtxmitframe=NULL)";
     case TX_ERR_BUFFER_NULL:    return "ERR_PAYLOAD_BUF_NULO(+0x80=NULL)";
     case TX_ERR_DUMP_FAILED:    return "ERR_DUMP_MGNTFRAME_FALHOU";
+    case TX_ERR_RATE_LIMIT:     return "ERR_RATE_LIMIT(<8ms)";
     default:                    return "ERR_DESCONHECIDO";
   }
 }
@@ -89,10 +91,12 @@ int wifi_tx_raw_frame(const void* frame, size_t length) {
   static uint32_t last_tx_ms = 0;
   uint32_t now_ms = millis();
   if (last_tx_ms != 0 && (now_ms - last_tx_ms) < 8) {
-    tx_telemetry.tx_alloc_failures++;
-    tx_telemetry.last_error_code = TX_ERR_ALLOC_FRAME;
+    // NAO e falha do anel: o quadro nem chegou ao driver. Codigo proprio
+    // para o chamador nao confundir com alloc_mgtxmitframe()==NULL.
+    tx_telemetry.tx_rate_limited++;
+    tx_telemetry.last_error_code = TX_ERR_RATE_LIMIT;
     tx_telemetry.last_fail_ms    = millis();
-    return TX_ERR_ALLOC_FRAME;
+    return TX_ERR_RATE_LIMIT;
   }
   last_tx_ms = now_ms;
 

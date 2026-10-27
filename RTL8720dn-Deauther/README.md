@@ -132,10 +132,13 @@ Injeta continuamente quadros de anúncio de rede (Beacons) no ar, criando dezena
    - O campo de tamanho do *IE 0 (SSID)* do padrão IEEE 802.11 possui 1 byte, permitindo no máximo 32 octetos.
    - O firmware impõe truncamento estrito em 32 bytes em todas as rotinas (`snprintf` e checagem de limites), eliminando corrupção de memória e congelamento de transmissão durante ciclos longos de pacotes.
 
-5. **Drenagem do Anel de TX (Channel Hopping):**
+5. **Drenagem do Anel de TX (Channel Hopping) + Agenda Round-Robin:**
    - O anel de descritores de gerenciamento do RTL8720DN satura em ~33 quadros quando o rádio permanece preso em um único canal, fazendo `alloc_mgtxmitframe()` retornar `NULL` e travando o firmware após poucos pacotes.
-   - O flood alterna a sintonia a cada slot entre o canal primário (`1`) e um canal de escape (`11`, mesma lógica do *ghost group* do deauth), o que esvazia o anel periodicamente e mantém a transmissão estável por tempo indefinido.
-   - Cada slot envia uma rajada curta (`BEACON_FRAMES_PER_SLOT`) com `delay(10)` + `yield()` entre quadros, e qualquer falha de alocação força uma re-sintonia imediata no slot seguinte. Após `BEACON_MAX_CONSEC_FAIL` falhas consecutivas o ataque é interrompido para proteger o firmware.
+   - O flood alterna a sintonia a cada `BEACON_HOP_EVERY_FRAMES` (16) beacons entre o canal primário (`1`) e um canal de escape (`11`, mesma lógica do *ghost group* do deauth), o que esvazia o anel periodicamente e mantém a transmissão estável por tempo indefinido.
+   - **Agenda orientada a manter todas as redes no ar:** o firmware envia **1 beacon por vez**, em round-robin estrito (`0,1,...,N-1,0,...`). O espaçamento é `gap = clamp(BEACON_REFRESH_MS / N, BEACON_MIN_PACING_MS, BEACON_MAX_PACING_MS)`, para que uma rodada completa com os `N` SSIDs feche em ~`BEACON_REFRESH_MS` (200 ms por padrão). Na prática, 20 SSIDs → 1 beacon a cada 10 ms → cada uma das 20 redes é reanunciada a cada ~200-250 ms, dentro da janela de validade dos scanners.
+   - Durante o flood o redraw do OLED cai para 100 ms (era 30 ms): cada frame I2C a 400 kHz bloqueia o loop por ~23 ms e atrasaria a rodada.
+   - O envio não trava a interface: a espera entre beacons usa `delay(1)` (cede CPU ao driver a cada 1 ms), então botões, render e serial continuam responsivos. **Isso é obrigatório:** o `loop()` do Arduino roda em prioridade alta no FreeRTOS; sem bloquear, a task de TX do WiFi não roda, os buffers de gerenciamento não voltam ao pool e todo beacon seguinte falha com `TX_ERR_ALLOC_FRAME (-4)`. Falha de alocação (`TX_ERR_ALLOC_FRAME`) aplica respiro de 20 ms e força re-sintonia no beacon seguinte; após `BEACON_MAX_CONSEC_FAIL` falhas consecutivas o ataque é interrompido para proteger o firmware.
+   - O display mostra `APs:N XXXms`, onde `XXXms` é a duração real da última rodada completa. Se ficar muito acima de `BEACON_REFRESH_MS`, o driver está engasgando: confira `Alloc` no log `[BEACON-STAT]` e reduza `N`.
    - O endereço MAC é derivado deterministicamente do índice do SSID (bit *Locally Administered* ativo), reutilizando o mesmo BSSID para o mesmo SSID falso — como o deauth faz com o BSSID real do alvo.
 
 ---
@@ -165,8 +168,40 @@ Transmite pacotes de anúncio BLE 5.0 não conectáveis (*Non-Connectable Undire
        - `0x10`: Apple Watch Pairing;
      - **Authentication / Status Mask:** Bytes de estado de bateria simulados (ex: case 100%, fone esquerdo 100%, fone direito 100%).
 
-3. **Rotação de Endereço MAC (MAC Spoofing):**
-   - A cada ciclo ou troca de payload, o firmware gera um novo endereço de rádio aleatório (Random Static/Private Address), evitando que o subsistema de Bluetooth do sistema operacional filtre os pacotes repetidos por supressão de duplicatas.
+3. **Rotação de Endereço MAC (AdvA / MAC Spoofing):**
+   - O iOS identifica um acessório pelo **endereço de origem do advertising (AdvA)**. Enquanto o AdvA não muda, ele exibe **um** popup e descarta os pacotes seguintes como "o mesmo dispositivo". É exatamente esse o sintoma de "só aparece um popup".
+   - A cada troca de identidade o firmware executa, nesta ordem:
+     1. `le_adv_stop()` e espera `GAP_ADV_STATE_IDLE` (o stack **ignora silenciosamente** troca de endereço/parâmetros se o advertising ainda não parou);
+     2. `le_set_rand_addr(mac)` → HCI `LE_Set_Random_Address`;
+     3. `le_adv_set_param(GAP_PARAM_ADV_LOCAL_ADDR_TYPE, GAP_LOCAL_ADDR_LE_RANDOM)`;
+     4. `le_adv_start()` → `LE_Set_Advertising_Parameters` com `own_addr_type = 1 (random)`;
+     5. confirma que o GAP entrou em `GAP_ADV_STATE_ADVERTISING`.
+   - **Formato do endereço:** o array do SDK é *little-endian* (`mac[0]` = LSB, `mac[5]` = MSB). Endereço *static random* exige os dois bits mais significativos em `11`, logo `mac[5] |= 0xC0`. Essa ordem foi confirmada no binário (`hci_cmd_addr_param` copia os 6 bytes sem inverter) e em `BLEAddr::str()`, que imprime `_btAddr[5]` primeiro.
+   - **Hold por identidade:** `BLE_SPAM_REPEAT` (padrão `2`) mantém o mesmo MAC + payload no ar por N ciclos **sem parar o advertising** (20 ms de intervalo ≈ 5 pacotes por ciclo). Isso dá tempo do iOS registrar aquele MAC antes do próximo aparecer — trocar rápido demais faz o iPhone tratar os pacotes como ruído. Cadência final: `BLE_SPAM_INTERVAL_MS` (110 ms) × `BLE_SPAM_REPEAT` (2) ≈ **220 ms por MAC (~4-5 identidades novas por segundo)**.
+   - **Potência de TX:** `BLE_TX_GAIN` (padrão `0x23` = **+4,5 dBm**, máximo documentado). O firmware chama o comando vendor `le_adv_set_tx_power(0, BLE_TX_GAIN)` uma vez por sessão, logo após o stack ficar pronto (`vendor_cmd_init()` já rodou). A tabela do SDK é `0x06` = −10 dBm, `0x1A` = 0 dBm, `0x23` = +4,5 dBm; `0` mantém o default do driver. O retorno da função só confirma o **enfileiramento** do HCI (o resultado final viria em `GAP_MSG_VENDOR_CMD_RSP`, que não registramos para não sobrescrever o callback de coexistence do core).
+   - `BLE_MAC_ROTATE 0` desliga a rotação e usa o MAC público fixo do chip como fallback.
+   - Se o controller recusar um endereço, o firmware **não desiste**: registra a falha, cai para o MAC público naquele ciclo e tenta novamente na próxima rotação.
+
+#### Como verificar se a rotação está funcionando (no ar):
+1. Abra um app de scanner BLE (nRF Connect, LightBlue) e toque em *Scan*.
+2. Ligue o BLE Spam no BW16.
+3. Observe vários dispositivos "AirPods" aparecendo e desaparecendo, **cada um com um endereço diferente** (tipo `Random`). Se o endereço ficar sempre igual, a rotação não chegou ao controller.
+4. No serial (115200) cada rotação imprime:
+   ```
+   [BLE] Airpods id=0x02 len=31 mac=C2:9A:41:0B:77:E4 type=1(RAND) dt=452ms
+   ```
+   - `type=1(RAND)` → o GAP está com o modo aleatório ativo;
+   - `type=0(PUB)` ou `(PUB)` após o MAC → caiu no fallback público;
+   - `AVISO: adv nao entrou em ADVERTISING` → o controller recusou o endereço/MAC.
+
+#### Diagnóstico rápido:
+| Sintoma no serial | Significado | Ação |
+|---|---|---|
+| `mac=...` diferente a cada ~2 ciclos e `type=1(RAND)` | rotação aplicada no host | se o iPhone ainda mostra 1 popup, aumente `BLE_SPAM_REPEAT` |
+| `TX power gain=0x23 -> enviado (cause=0)` | comando vendor de potência aceito na fila HCI | se `-> FALHOU`, o stack ainda não estava pronto: reinicie o spam |
+| `le_set_rand_addr falhou` repetido | comando HCI recusado/enfileirado | reduza a cadência (`BLE_SPAM_INTERVAL_MS`) |
+| `adv nao ficou IDLE` | stop ainda pendente | aumente o timeout em `adv_wait_idle()` ou a cadência |
+| `adv nao entrou em ADVERTISING` | endereço inválido recusado pelo controller | reporte o log completo |
 
 ---
 

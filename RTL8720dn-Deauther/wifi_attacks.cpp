@@ -66,6 +66,20 @@ static bool     beacon_hop_slot          = false;
 static uint32_t beacon_consec_fail       = 0;
 static char     beacon_last_ssid[36]     = {0};
 
+// ── Scheduler: manter todos os SSIDs "vivos" ao mesmo tempo ──
+static uint32_t beacon_last_frame_ms     = 0;   // referencia do gap (instante REAL do TX)
+static uint32_t beacon_last_attempt_ms   = 0;   // instante da ultima tentativa (diagnostico dt)
+static uint32_t beacon_last_faillog_ms   = 0;   // throttle do log de falhas
+static uint32_t beacon_rate_limited      = 0;   // descartes pelo limitador local (<8ms)
+static uint32_t beacon_gap_ms            = 0;   // espacamento alvo entre beacons
+static uint32_t beacon_hop_frames        = 0;   // beacons desde a ultima troca de canal
+static uint32_t beacon_backoff_until_ms  = 0;   // respiro apos esgotar o anel de TX
+static uint32_t beacon_round_start_ms    = 0;   // inicio da rodada atual
+uint32_t        beacon_round_ms          = 0;   // duracao da ultima rodada completa
+static uint16_t beacon_round_ok          = 0;   // sucessos na rodada atual
+static uint16_t beacon_round_ok_last     = 0;   // sucessos da ultima rodada
+static uint16_t beacon_round_target      = 0;   // SSIDs esperados na rodada
+
 // ── get_beacon_ssid ───────────────────────────────────────
 // SSID uniqueness strategy (safe, 802.11 max = 32 bytes):
 //
@@ -407,6 +421,18 @@ void run_deauth_frame() {
 }
 
 // ── Beacon ────────────────────────────────────────────────
+
+// Espacamento entre beacons para que uma rodada completa (todos os N SSIDs)
+// caiba em BEACON_REFRESH_MS. O piso existe por causa do rate limiter de
+// wifi_tx_raw_frame() (quadros a menos de 8ms sao descartados).
+static uint32_t beacon_gap_for_count(int n) {
+  if (n < 1) n = 1;
+  uint32_t gap = (uint32_t)BEACON_REFRESH_MS / (uint32_t)n;
+  if (gap < (uint32_t)BEACON_MIN_PACING_MS) gap = BEACON_MIN_PACING_MS;
+  if (gap > (uint32_t)BEACON_MAX_PACING_MS) gap = BEACON_MAX_PACING_MS;
+  return gap;
+}
+
 void start_beacon() {
   DEBUG_SER_PRINT("\n[BEACON] >>> INICIANDO BEACON FLOOD <<<\n");
   reset_tx_telemetry();
@@ -440,7 +466,12 @@ void start_beacon() {
   if (ch_res == 0 && verified_ch == primary_ch) {
     last_hw_beacon_channel = primary_ch;
   }
-  delay(15);
+
+  // Respiro de acomodacao: deixa o driver devolver ao pool qualquer
+  // descritor de gerenciamento ainda pendente (scan, ataque anterior).
+  // Sem isso o primeiro beacon ja pode nascer com -4 (ancora cheia) e o
+  // scheduler nunca mais consegue alocar.
+  for (int i = 0; i < 8; i++) delay(10);
 
   const char* mode_str = (beacon_mode == BEACON_MODE_RANDOM) ? "RANDOM" :
                          (beacon_mode == BEACON_MODE_CLONE)  ? "CLONE" : "CUSTOM";
@@ -460,6 +491,34 @@ void start_beacon() {
   beacon_ssid_idx    = 0;
   beacon_fail_count  = 0;
   last_beacon_stat_ms= millis();
+
+  // ── Agenda: round-robin para manter TODOS os SSIDs no ar ──
+  const int sched_count = (beacon_count > 0) ? beacon_count : NUM_BEACON_SSIDS;
+  beacon_gap_ms           = beacon_gap_for_count(sched_count);
+  beacon_round_target     = (uint16_t)sched_count;
+  beacon_round_ms         = 0;
+  beacon_round_ok         = 0;
+  beacon_round_ok_last    = 0;
+  beacon_hop_frames       = 0;
+  beacon_backoff_until_ms = 0;
+  beacon_last_frame_ms    = millis();
+  beacon_last_attempt_ms  = 0;
+  beacon_last_faillog_ms  = 0;
+  beacon_rate_limited     = 0;
+  beacon_round_start_ms   = millis();
+
+  {
+    uint32_t round_est = beacon_gap_ms * (uint32_t)sched_count;
+    char sched[168];
+    snprintf(sched, sizeof(sched),
+             "[BEACON] Agenda: 1 beacon/%lums -> rodada de %d SSIDs em ~%lums (alvo %dms)\n",
+             (unsigned long)beacon_gap_ms, sched_count,
+             (unsigned long)round_est, (int)BEACON_REFRESH_MS);
+    DEBUG_SER_PRINT(sched);
+    if (round_est > 1500) {
+      DEBUG_SER_PRINT("[BEACON] AVISO: N alto para o rate limiter do driver; a rodada passa de 1,5s e scanners mais rigorosos podem deixar redes expirarem.\n");
+    }
+  }
 }
 
 void stop_beacon() {
@@ -475,6 +534,12 @@ void stop_beacon() {
   beacon_fail_count  = 0;
   beacon_consec_fail = 0;
   beacon_hop_slot    = false;
+  beacon_hop_frames  = 0;
+  beacon_last_frame_ms    = 0;
+  beacon_last_attempt_ms  = 0;
+  beacon_backoff_until_ms = 0;
+  beacon_round_ms         = 0;
+  beacon_round_ok         = 0;
   last_hw_beacon_channel = -1;
 }
 
@@ -498,111 +563,167 @@ static int beacon_send_one(int idx) {
   return wifi_tx_beacon_frame(beacon_mac, broadcast_mac, beacon_last_ssid);
 }
 
+// =========================================================
+// Scheduler do beacon flood
+//
+// Meta: manter TODOS os beacon_count SSIDs no ar ao mesmo tempo.
+//
+//  - 1 beacon por vez, round-robin estrito (0..N-1,0..). Assim cada SSID
+//    e reenviado a cada ~gap*N ms e nenhum fica "esquecido".
+//  - gap = BEACON_REFRESH_MS / N, com piso de 10ms (rate limiter do
+//    driver) e teto de 100ms (N pequeno continua com taxa alta).
+//  - A espera do gap usa delay(1): o loop Arduino roda em prioridade alta,
+//    entao ele PRECISA bloquear para a task de TX do WiFi rodar e devolver
+//    os buffers de gerenciamento ao pool. Espera ativa (millis()) esgota
+//    o anel e faz todo beacon seguinte falhar com -4.
+//  - O anel de TX e drenado trocando de canal a cada
+//    BEACON_HOP_EVERY_FRAMES beacons.
+// =========================================================
 void run_beacon_frame() {
   if (!isBeaconing) return;
 
-  int safe_count = (beacon_count > 0) ? beacon_count : NUM_BEACON_SSIDS;
+  const int safe_count = (beacon_count > 0) ? beacon_count : NUM_BEACON_SSIDS;
+  uint32_t now = millis();
 
-  // ── Sintonia do slot (canal primário <-> canal alternado) ─────────────
-  // Idêntico ao deauth: a troca de canal drena o anel de TX de
-  // gerenciamento antes que ele chegue ao limite de ~33 descritores.
-  int target_ch = beacon_hop_slot ? (int)beacon_hop_channel : (int)BEACON_CHANNEL;
-  if (last_hw_beacon_channel != target_ch) {
-    int ch_ret = wext_set_channel(WLAN0_NAME, target_ch);
-    uint8_t verified_ch = 0;
-    wext_get_channel(WLAN0_NAME, &verified_ch);
-    if (ch_ret != 0 || verified_ch != target_ch) {
-      DEBUG_SER_PRINT("[BEACON-HW-ERR] Falha mudanca canal ");
-      DEBUG_SER_PRINT(target_ch);
-      DEBUG_SER_PRINT(" (wext ret=");
-      DEBUG_SER_PRINT(ch_ret);
-      DEBUG_SER_PRINT(", hw_ch=");
-      DEBUG_SER_PRINT((int)verified_ch);
-      DEBUG_SER_PRINT(")\n");
-    }
-    last_hw_beacon_channel = target_ch;
-    delay(15);
-  }
+  // Respiro apos esgotar o anel de TX (evita insistir e travar).
+  if ((int32_t)(now - beacon_backoff_until_ms) < 0) return;
 
-  // ── Rajada curta por slot ────────────────────────────────────────────
-  // O deauth envia 1 frame por alvo e devolve o controle ao scheduler;
-  // aqui o mesmo pacing evita encher a fila de uma vez.
-  for (int n = 0; n < BEACON_FRAMES_PER_SLOT; n++) {
-    int idx     = beacon_ssid_idx % safe_count;
-    int tx_res  = beacon_send_one(idx);
-
-    if (tx_res == TX_SUCCESS) {
-      beacon_frames++;
-      beacon_consec_fail = 0;
-      beacon_ssid_idx    = (beacon_ssid_idx + 1) % safe_count;
-    } else {
-      beacon_fail_count++;
-      beacon_consec_fail++;
-      // Em rajada de falhas o log serial (com flush) pesa mais que o
-      // próprio driver — imprime só o início e amostras da sequência.
-      if (beacon_consec_fail <= 3 || (beacon_consec_fail % 20) == 0) {
-        DEBUG_SER_PRINT("[BEACON-FAIL] Cod=");
-        DEBUG_SER_PRINT(tx_res);
-        DEBUG_SER_PRINT(" (");
-        DEBUG_SER_PRINT(tx_status_str(tx_res));
-        DEBUG_SER_PRINT(") dump_ret=");
-        DEBUG_SER_PRINT(tx_telemetry.last_dump_ret);
-        DEBUG_SER_PRINT(" SSID='");
-        DEBUG_SER_PRINT(beacon_last_ssid);
-        DEBUG_SER_PRINT("' Heap=");
-        DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
-        DEBUG_SER_PRINT(" B\n");
-      }
-
-      if (tx_res == TX_ERR_ALLOC_FRAME) {
-        // Anel cheio: invalida a sintonia para forçar set_channel no
-        // próximo slot (drenagem) e não insiste na mesma rajada.
-        last_hw_beacon_channel = -1;
-        delay(6);
-        break;
-      }
-      beacon_ssid_idx = (beacon_ssid_idx + 1) % safe_count;
-    }
-
-    delay(10);
-    yield();
-  }
-
-  // Pausa pós-slot igual à do deauth (dá tempo ao driver de liberar o
-  // descritor) e alterna o canal para o próximo slot.
-  delay(8);
-  yield();
-  beacon_hop_slot = !beacon_hop_slot;
-
-  // Trava de segurança: se nem a troca de canal devolveu descritores,
-  // interrompe o ataque antes de o firmware travar de vez.
-  if (beacon_consec_fail >= BEACON_MAX_CONSEC_FAIL) {
-    DEBUG_SER_PRINT("[BEACON-WARN] ");
-    DEBUG_SER_PRINT(beacon_consec_fail);
-    DEBUG_SER_PRINT(" falhas consecutivas - anel TX nao drenou. Ataque interrompido.\n");
-    stop_beacon();
+  // ── Ritmo: um beacon por vez na cadencia da rodada ──────
+  if (beacon_last_frame_ms != 0 &&
+      (uint32_t)(now - beacon_last_frame_ms) < beacon_gap_ms) {
+    // CRITICO: nao girar em espera ativa. O loop Arduino roda em prioridade
+    // 7 no FreeRTOS (acima das tasks do driver WiFi); sem bloquear, a task
+    // de TX nunca roda, os buffers de gerenciamento nao voltam para o pool
+    // e alloc_mgtxmitframe() passa a devolver NULL (-4) para sempre.
+    delay(1);
     return;
   }
 
-  // Telemetria periodica a cada 2000ms
-  if (millis() - last_beacon_stat_ms >= 2000) {
-    last_beacon_stat_ms = millis();
-    DEBUG_SER_PRINT("[BEACON-STAT] Beacons=");
-    DEBUG_SER_PRINT(beacon_frames);
-    DEBUG_SER_PRINT(" | Falhas=");
-    DEBUG_SER_PRINT(beacon_fail_count);
-    DEBUG_SER_PRINT(" (AllocFail=");
-    DEBUG_SER_PRINT(tx_telemetry.tx_alloc_failures);
-    DEBUG_SER_PRINT(", DumpFail=");
-    DEBUG_SER_PRINT(tx_telemetry.tx_dump_failures);
-    DEBUG_SER_PRINT(") | Heap=");
-    DEBUG_SER_PRINT((uint32_t)xPortGetFreeHeapSize());
-    DEBUG_SER_PRINT(" B (Min=");
-    DEBUG_SER_PRINT((uint32_t)xPortGetMinimumEverFreeHeapSize());
-    DEBUG_SER_PRINT(" B) | Canal=");
-    DEBUG_SER_PRINT(last_hw_beacon_channel);
-    DEBUG_SER_PRINT(" | Ultimo SSID='");
-    DEBUG_SER_PRINT(beacon_last_ssid);
-    DEBUG_SER_PRINT("'\n");
+  // ── Troca de canal (drenagem do anel de TX) ─────────────
+  // Mesma mecanica do ghost group do deauth, mas agora apenas a cada
+  // BEACON_HOP_EVERY_FRAMES beacons: trocar a cada 2 frames desperdicava
+  // metade da rodada em cada canal.
+  if (BEACON_CHANNEL_HOP && beacon_hop_frames >= BEACON_HOP_EVERY_FRAMES) {
+    beacon_hop_frames = 0;
+    int target_ch = beacon_hop_slot ? (int)BEACON_CHANNEL : (int)beacon_hop_channel;
+    beacon_hop_slot = !beacon_hop_slot;
+    if (last_hw_beacon_channel != target_ch) {
+      int ch_ret = wext_set_channel(WLAN0_NAME, target_ch);
+      uint8_t verified_ch = 0;
+      wext_get_channel(WLAN0_NAME, &verified_ch);
+      if (ch_ret != 0 || verified_ch != target_ch) {
+        DEBUG_SER_PRINT("[BEACON-HW-ERR] Falha mudanca canal ");
+        DEBUG_SER_PRINT(target_ch);
+        DEBUG_SER_PRINT(" (wext ret=");
+        DEBUG_SER_PRINT(ch_ret);
+        DEBUG_SER_PRINT(", hw_ch=");
+        DEBUG_SER_PRINT((int)verified_ch);
+        DEBUG_SER_PRINT(")\n");
+      }
+      last_hw_beacon_channel = target_ch;
+      delay(15);
+    }
+  }
+
+  // ── 1 SSID por vez, sempre avancando (fairness) ─────────
+  // O gap conta a partir do instante REAL do TX. Referencia-lo antes da
+  // troca de canal (que leva ~15ms) fazia o proximo beacon sair ~1ms
+  // depois deste e cair no rate limiter de 8ms do driver (Cod=-4).
+  const uint32_t attempt_ms = millis();
+  const uint32_t attempt_dt = (beacon_last_attempt_ms != 0)
+                                ? (attempt_ms - beacon_last_attempt_ms) : 0;
+  beacon_last_frame_ms   = attempt_ms;
+  beacon_last_attempt_ms = attempt_ms;
+
+  const int idx    = beacon_ssid_idx % safe_count;
+  const int tx_res = beacon_send_one(idx);
+
+  beacon_ssid_idx = (idx + 1) % safe_count;
+  beacon_hop_frames++;
+
+  if (tx_res == TX_SUCCESS) {
+    beacon_frames++;
+    beacon_round_ok++;
+    beacon_consec_fail = 0;
+  } else if (tx_res == TX_ERR_RATE_LIMIT) {
+    // O quadro nem chegou ao driver (limitador local de 8ms). Nao e' anel
+    // cheio: nao faz backoff nem troca de canal, so tenta no proximo gap.
+    beacon_rate_limited++;
+    beacon_consec_fail = 0;
+  } else {
+    beacon_fail_count++;
+    beacon_consec_fail++;
+    // Serial com flush custa ~9ms por linha e ainda atrasa o proximo
+    // beacon: no maximo 2 linhas por segundo, sempre com o codigo real.
+    if (millis() - beacon_last_faillog_ms >= 500) {
+      beacon_last_faillog_ms = millis();
+      char flog[176];
+      snprintf(flog, sizeof(flog),
+               "[BEACON-FAIL] Cod=%d (%s) dt=%lums consec=%lu falhas=%lu heap=%lu B SSID='%s'\n",
+               tx_res, tx_status_str(tx_res),
+               (unsigned long)attempt_dt,
+               (unsigned long)beacon_consec_fail,
+               (unsigned long)beacon_fail_count,
+               (unsigned long)xPortGetFreeHeapSize(),
+               beacon_last_ssid);
+      DEBUG_SER_PRINT(flog);
+    }
+
+    if (tx_res == TX_ERR_ALLOC_FRAME) {
+      // Anel realmente cheio: respira e forca re-sintonia no proximo
+      // beacon (o contador no limite garante a troca de canal).
+      beacon_backoff_until_ms = millis() + 25;
+      beacon_hop_frames       = BEACON_HOP_EVERY_FRAMES;
+      last_hw_beacon_channel  = -1;
+    }
+
+    // Trava de seguranca: se nem a troca de canal devolveu descritores,
+    // interrompe o ataque antes de o firmware travar de vez.
+    if (beacon_consec_fail >= BEACON_MAX_CONSEC_FAIL) {
+      DEBUG_SER_PRINT("[BEACON-WARN] ");
+      DEBUG_SER_PRINT((uint32_t)beacon_consec_fail);
+      DEBUG_SER_PRINT(" falhas consecutivas - anel TX nao drenou. Ataque interrompido.\n");
+      stop_beacon();
+      return;
+    }
+  }
+
+  // ── Fechamento de rodada: todos os SSIDs visitados ──────
+  if (beacon_ssid_idx == 0) {
+    uint32_t r = millis() - beacon_round_start_ms;
+    beacon_round_start_ms = millis();
+    beacon_round_ms       = r;
+    beacon_round_ok_last  = beacon_round_ok;
+    beacon_round_target   = (uint16_t)safe_count;
+    beacon_round_ok       = 0;
+  }
+
+  // Devolve CPU ao driver imediatamente apos a tentativa: e' o que libera
+  // o descritor de gerenciamento (o antigo delay(10) por frame cumpria
+  // esse papel). Sem esse block o pool de buffers esgota e todo beacon
+  // seguinte falha com -4 (alloc_mgtxmitframe == NULL). O restante do gap
+  // e' preenchido pelo delay(1) da espera acima, que tambem cede CPU.
+  delay(1);
+
+  // ── Telemetria periodica (2s) ───────────────────────────
+  now = millis();
+  if (now - last_beacon_stat_ms >= 2000) {
+    last_beacon_stat_ms = now;
+    char line[224];
+    snprintf(line, sizeof(line),
+             "[BEACON-STAT] Beacons=%lu Falhas=%lu (Alloc=%lu Dump=%lu RateLimit=%lu) | Rodada=%lums p/ %u SSIDs (ok %u/%u) | Gap=%lums | Heap=%lu B | Canal=%d\n",
+             (unsigned long)beacon_frames,
+             (unsigned long)beacon_fail_count,
+             (unsigned long)tx_telemetry.tx_alloc_failures,
+             (unsigned long)tx_telemetry.tx_dump_failures,
+             (unsigned long)beacon_rate_limited,
+             (unsigned long)beacon_round_ms,
+             (unsigned)beacon_round_target,
+             (unsigned)beacon_round_ok_last,
+             (unsigned)beacon_round_target,
+             (unsigned long)beacon_gap_ms,
+             (unsigned long)xPortGetFreeHeapSize(),
+             last_hw_beacon_channel);
+    DEBUG_SER_PRINT(line);
   }
 }

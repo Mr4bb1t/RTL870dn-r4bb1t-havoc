@@ -37,6 +37,7 @@ extern uint8_t      beacon_mac[6];
 extern uint8_t      broadcast_mac[6];
 extern int          beacon_ssid_idx;       // current SSID index in cycle
 extern uint32_t     beacon_frames;         // total frames sent
+extern uint32_t     beacon_round_ms;       // tempo da ultima rodada completa (todos os SSIDs)
 extern bool         isBeaconing;
 
 extern BeaconMode   beacon_mode;           // RANDOM / CLONE / CUSTOM

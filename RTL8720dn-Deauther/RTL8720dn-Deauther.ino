@@ -21,7 +21,6 @@
 #include "debug.h"
 #include <Wire.h>
 
-static uint32_t last_beacon_ms   = 0;
 static uint32_t last_deauth_ms   = 0;
 static uint32_t last_ble_spam_ms = 0;
 static uint32_t last_render_ms   = 0;
@@ -133,16 +132,11 @@ void loop() {
   tick_anim();
   handle_input();
 
-  // "Arma" o timer no início de cada ataque: sem isso last_*_ms ainda vale
-  // 0 e o primeiro frame sairia no mesmo ciclo do start, antes do primeiro
-  // render da tela de ataque (a tela de confirmação ficava congelada).
+  // O scheduler do beacon controla o proprio ritmo (1 beacon por vez,
+  // round-robin). Chamar sem gate deixa o loop livre entre os beacons e
+  // mantem botoes/render responsivos durante o flood.
   if (isBeaconing) {
-    if (millis() - last_beacon_ms > BEACON_INTERVAL_MS) {
-      run_beacon_frame();
-      last_beacon_ms = millis();
-    }
-  } else {
-    last_beacon_ms = millis();
+    run_beacon_frame();
   }
 
   if (isDeauthing) {
@@ -154,11 +148,19 @@ void loop() {
     last_deauth_ms = millis();
   }
   uint32_t ble_interval = ble_focused_mode ? BLE_FOCUSED_INTERVAL_MS : BLE_SPAM_INTERVAL_MS;
-  if (isBleSpamming && (millis() - last_ble_spam_ms > ble_interval)) {
-    ble_spam_next();
+  if (isBleSpamming) {
+    if (millis() - last_ble_spam_ms > ble_interval) {
+      ble_spam_next();
+      last_ble_spam_ms = millis();
+    }
+  } else {
     last_ble_spam_ms = millis();
   }
-  if (millis() - last_render_ms > 30) {
+  // Tela do beacon e quase estatica (a animacao muda a cada 200ms). Reduzir
+  // o redraw durante o flood libera o loop para enviar beacons: cada frame
+  // I2C a 400kHz custa ~23ms, tempo em que nenhum beacon sai.
+  const uint32_t render_interval = isBeaconing ? 100 : 30;
+  if (millis() - last_render_ms > render_interval) {
     render_screen();
     last_render_ms = millis();
   }

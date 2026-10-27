@@ -12,7 +12,8 @@ enum TxStatus {
   TX_ERR_ADAPTER_NULL   = -3, // Ponteiro padapter e nulo (estrutura do driver corrompida)
   TX_ERR_ALLOC_FRAME    = -4, // alloc_mgtxmitframe retornou nulo (descritores TX esgotados / fila cheia)
   TX_ERR_BUFFER_NULL    = -5, // Buffer de payload (+0x80) e nulo (HardFault evitado!)
-  TX_ERR_DUMP_FAILED    = -6  // dump_mgntframe retornou codigo de erro
+  TX_ERR_DUMP_FAILED    = -6, // dump_mgntframe retornou codigo de erro
+  TX_ERR_RATE_LIMIT     = -7  // Descartado pelo limitador local (<8ms entre quadros)
 };
 
 // Telemetria de injecao para diagnostico de crash interno
@@ -25,6 +26,7 @@ struct TxTelemetry {
   int      last_error_code;     // Ultimo codigo de erro TxStatus
   int      last_dump_ret;       // Ultimo retorno retornado por dump_mgntframe
   uint32_t last_fail_ms;        // Timestamp millis da ultima falha
+  uint32_t tx_rate_limited;     // Quadros descartados pelo limitador de 8ms
 };
 
 extern TxTelemetry tx_telemetry;
