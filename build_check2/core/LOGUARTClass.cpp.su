@@ -1,0 +1,14 @@
+LOGUARTClass.h:28:14:virtual void LOGUARTClass::begin(uint32_t)	0	static
+LOGUARTClass.h:38:9:virtual LOGUARTClass::operator bool()	0	static
+LOGUARTClass.cpp:231:5:virtual int LOGUARTClass::available()	0	static
+LOGUARTClass.cpp:235:5:virtual int LOGUARTClass::peek()	0	static
+LOGUARTClass.cpp:242:5:virtual int LOGUARTClass::read()	0	static
+LOGUARTClass.cpp:253:6:virtual void LOGUARTClass::flush()	0	static
+LOGUARTClass.cpp:43:6:void arduino_loguart_irq_handler(uint32_t, SerialIrq)	8	static
+LOGUARTClass.cpp:83:6:virtual void LOGUARTClass::begin(uint32_t, uint8_t)	16	static
+LOGUARTClass.cpp:224:6:virtual void LOGUARTClass::end()	0	static
+LOGUARTClass.cpp:263:8:virtual size_t LOGUARTClass::write(uint8_t)	8	static
+LOGUARTClass.cpp:53:1:LOGUARTClass::LOGUARTClass(int, RingBuffer*)	12	static
+LOGUARTClass.cpp:61:6:void LOGUARTClass::IrqHandler()	16	static
+LOGUARTClass.cpp:270:6:bool Serial_available()	0	static
+LOGUARTClass.cpp:272:1:cpp)	16	static

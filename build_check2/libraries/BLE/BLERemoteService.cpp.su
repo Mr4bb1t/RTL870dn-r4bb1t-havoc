@@ -1,0 +1,9 @@
+BLERemoteService.cpp:12:1:BLERemoteService::BLERemoteService(BLEUUID)	16	static
+BLERemoteService.cpp:16:1:BLERemoteService::~BLERemoteService()	24	static
+BLERemoteService.cpp:24:9:BLEUUID BLERemoteService::getUUID()	8	static
+BLERemoteService.cpp:32:26:BLERemoteCharacteristic* BLERemoteService::getCharacteristic(BLEUUID)	96	static
+BLERemoteService.cpp:28:26:BLERemoteCharacteristic* BLERemoteService::getCharacteristic(const char*)	160	static
+BLERemoteService.cpp:46:6:bool BLERemoteService::addCharacteristic(BLERemoteCharacteristic*)	24	static
+BLERemoteService.cpp:70:6:void BLERemoteService::clientReadResultCallbackDefault(uint8_t, uint16_t, uint16_t, uint16_t, uint8_t*)	32	static
+BLERemoteService.cpp:90:6:void BLERemoteService::clientWriteResultCallbackDefault(uint8_t, T_GATT_WRITE_TYPE, uint16_t, uint16_t, uint8_t)	32	static
+BLERemoteService.cpp:110:14:T_APP_RESULT BLERemoteService::clientNotifyIndicateCallbackDefault(uint8_t, bool, uint16_t, uint16_t, uint8_t*)	32	static

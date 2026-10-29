@@ -1,6 +1,6 @@
 # RTL8720DN R4BB1T HAVOC — Documentação Técnica
 
-Firmware de auditoria de radiofrequência autônomo para o SoC Realtek RTL8720DN (AmebaD / Módulo BW16). Implementa injeção de quadros brutos 802.11 em bandas duplas (2.4 GHz e 5 GHz) e transmissão de pacotes de anúncio BLE 5.0 (Bluetooth Low Energy).
+Firmware de auditoria de radiofrequência autônomo para o SoC Realtek RTL8720DN (AmebaD / Módulo BW16). Implementa injeção de quadros brutos 802.11 em bandas duplas (2.4 GHz e 5 GHz), transmissão de pacotes de anúncio BLE 5.0 (Bluetooth Low Energy) e um controle universal IR com gravação, emissão e spam de códigos.
 
 ---
 
@@ -18,6 +18,7 @@ Firmware de auditoria de radiofrequência autônomo para o SoC Realtek RTL8720DN
 | **Interface do Display** | Barramento I2C por hardware operando a 400 kHz (Fast Mode) |
 | **Controlador de Display** | SH1106 OLED monocromático (resolução 128x64 pixels, endereço I2C `0x3C`) |
 | **Entradas de Usuário** | 5 GPIOs em modo `INPUT_PULLUP` ativo-baixo (D-Pad de 5 direções) |
+| **Controle IR** | Receptor TSOP/VS1838 em D9 (PA_15) + emissor 38 kHz em D12 (PA_12) |
 | **Alimentação** | 3.3V DC regulado (consumo de pico durante transmissão RF de até 450 mA) |
 
 ---
@@ -39,13 +40,26 @@ Todas as entradas utilizam resistores de elevação internos configurados via `p
 
 | Chave | Função | Pino GPIO | Pino Físico BW16 | Conexão Externa | Estado Normal | Estado Pressionado |
 |:---|:---|:---:|:---:|:---|:---:|:---:|
-| **SW1** | UP | `PA_12` | D12 | `PA_12` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
+| **SW1** | UP | `PB_3` | D6 | `PB_3` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 | **SW2** | DOWN | `PA_13` | D11 | `PA_13` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
-| **SW3** | LEFT | `PA_15` | D9 | `PA_15` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
+| **SW3** | LEFT | `PA_30` | D3 | `PA_30` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 | **SW4** | RIGHT | `PA_27` | D2 | `PA_27` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 | **SW5** | ENTER | `PA_14` | D10 | `PA_14` ──[ Chave ]── `GND` | HIGH (3.3V) | LOW (0V) |
 
 *Debounce:* Implementado por software na máquina de estados com janela de bloqueio de 150 ms para eliminar repiques mecânicos.
+
+### 2.3 Controle IR (Receptor + Emissor)
+
+| Sinal IR | Pino GPIO (RTL8720DN) | Pino Físico BW16 | Descrição |
+|:---|:---:|:---:|:---|
+| **IR_RX** | `PA_15` | D9 | Saída demodulada do receptor TSOP/VS1838 (ativo-baixo, 38 kHz) |
+| **IR_TX** | `PA_12` | D12 | LED IR via transistor, modulado por PWM de 38 kHz |
+
+- **Receptor:** módulo TSOP38xx / VS1838B / HX1838 em 3.3 V, saída ligada diretamente ao D9.
+- **Emissor:** LED IR 940 nm + resistor (100–220 Ω) + transistor NPN/MOSFET de canal N. Nível alto do GPIO = portadora ativa.
+- **Persistência:** os sinais gravados ficam no setor de usuário da flash (`0x00100000`, biblioteca `FlashMemory`) e sobrevivem a reboots.
+- **Modo download:** o `D5 (PB_2)` é o strap de boot/download desta placa — mantenha-o **livre** (jumper no chip para gravar). Com fio no D5 o ROM não entra em modo de gravação; por isso o receptor usa o D9.
+- A documentação detalhada de gravação, emissão, spam e layout da flash está em [`RTL8720dn-Deauther/README.md`](RTL8720dn-Deauther/README.md).
 
 ---
 
@@ -61,6 +75,7 @@ RTL8720dn-Deauther/
 ├── wifi_scanner.h / .cpp       # Camada de varredura de canais 2.4GHz e 5GHz via driver Ameba
 ├── wifi_attacks.h / .cpp       # Montagem e injeção de quadros 802.11 (Deauth e Beacons)
 ├── ble_spam.h / .cpp           # Formatação e disparo de pacotes BLE GAP Advertising
+├── ir_remote.h / .cpp          # Gravação, decodificação, emissão e spam de sinais IR
 ├── ui_state.h / .cpp           # Máquina de estados finitos (FSM) e controle de fluxos
 ├── ui_display.h / .cpp         # Renderização de texto e buffers gráficos via U8g2
 ├── src/packet-injection/       # Envoltórios da API de envio de pacotes raw do RTL8720DN
@@ -164,6 +179,24 @@ Transmite pacotes de anúncio BLE 5.0 não conectáveis (*Non-Connectable Undire
 
 ---
 
+### 4.5 Controle Universal IR (Gravar / Emitir / Spam)
+
+O menu principal ganhou o card **IR Remote**, com ícone animado de TV (14 frames 48x48). Dentro dele:
+
+- **Record:** captura bordas em microssegundos por polling do pino D9, separa quadros por intervalos >15 ms e tenta decodificar **NEC**, **Samsung** e **Sony SIRC**. Exibe protocolo/código e oferece **SAVE**, **REPLAY** e **BACK**. Até **8 sinais** são gravados na flash.
+- **Emit:** lista os sinais salvos; ENTER abre o detalhe com **EMIT**, **DELETE** (com confirmação dupla) e **BACK**. Sinais decodificados são reenviados pelo protocolo; sinais desconhecidos são reproduzidos borda a borda.
+- **Spam:** alterna **VOLUME +** e **POWER** continuamente (~850 ms), percorrendo **Samsung, LG, Sony, Toshiba e NEC TV**. ENTER/LEFT interrompe.
+
+| Protocolo | Cabeçalho | Bit 0 | Bit 1 | Bits | Ordem |
+|:---|:---:|:---:|:---:|:---:|:---|
+| NEC | 9000 / 4500 µs | 560 / 560 µs | 560 / 1690 µs | 32 | LSB primeiro |
+| Samsung | 4500 / 4500 µs | 560 / 560 µs | 560 / 1690 µs | 32 | LSB primeiro |
+| Sony SIRC | 2400 / 600 µs | 600 µs mark | 1200 µs mark | 12 | MSB primeiro |
+
+**Persistência:** setor de 4096 bytes em `0x00100000`, com cabeçalho `IR01` + versão + contagem + até 8 `IRSavedSignal` (~406 bytes cada). A gravação usa `FlashMemory.update(true)` e sobrevive a reboots e regravações normais do sketch.
+
+---
+
 ## 5. Máquina de Estados e Operação da Interface (FSM)
 
 A interface opera em uma máquina de estados finitos centralizada em `ui_state.cpp`:
@@ -219,6 +252,7 @@ A interface opera em uma máquina de estados finitos centralizada em `ui_state.c
     ```
 - **Bibliotecas Requeridas:**
   - `U8g2` (instalável via Library Manager).
+  - `FlashMemory` (incluída no core AmebaD; usada para persistir os sinais IR).
 
 ### 6.2 Parâmetros da Placa
 - **Placa:** `BW16 (RTL8720DN)`

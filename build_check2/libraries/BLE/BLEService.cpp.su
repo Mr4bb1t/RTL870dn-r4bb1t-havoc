@@ -1,0 +1,16 @@
+BLEService.cpp:21:1:BLEService::~BLEService()	8	static
+BLEService.cpp:25:6:void BLEService::setUUID(BLEUUID)	16	static
+BLEService.cpp:13:1:BLEService::BLEService(BLEUUID)	88	static
+BLEService.cpp:17:1:BLEService::BLEService(const char*)	160	static
+BLEService.cpp:33:9:BLEUUID BLEService::getUUID()	8	static
+BLEService.cpp:37:6:void BLEService::addCharacteristic(BLECharacteristic&)	0	static
+BLEService.cpp:47:20:BLECharacteristic* BLEService::getCharacteristic(uint8_t)	0	static
+BLEService.cpp:55:6:void BLEService::setServiceID(T_SERVER_ID)	0	static
+BLEService.cpp:59:13:T_SERVER_ID BLEService::getServiceID()	0	static
+BLEService.cpp:64:9:uint8_t BLEService::getAttrCount()	16	static
+BLEService.cpp:93:9:uint8_t BLEService::generateAttrServiceDeclaration(T_ATTRIB_APPL*, uint8_t)	24	static
+BLEService.cpp:73:16:T_ATTRIB_APPL* BLEService::generateServiceAttrTable()	16	static
+BLEService.cpp:115:6:void BLEService::printAttr()	88	static
+BLEService.cpp:195:14:T_APP_RESULT BLEService::serviceAttrReadCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, uint16_t, uint16_t*, uint8_t**)	120	static
+BLEService.cpp:213:14:T_APP_RESULT BLEService::serviceAttrWriteCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, T_WRITE_TYPE, uint16_t, uint8_t*, void (**)(uint8_t, T_SERVER_ID, uint16_t, uint16_t, uint8_t*))	128	static
+BLEService.cpp:232:6:void BLEService::serviceCccdUpdateCallbackDefault(uint8_t, T_SERVER_ID, uint16_t, uint16_t)	120	static

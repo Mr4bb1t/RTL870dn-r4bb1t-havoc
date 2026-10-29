@@ -21,6 +21,16 @@
 #define OLED_SDA   8  // D8 -> PA_26
 
 // =========================================================
+// IR Remote Pins
+// =========================================================
+// D5 (PB_2)  = boot strap       -> keeps ROM out of UART download mode.
+// D4 (PA_29) = UART-bridge RX   -> conflicts with USB firmware upload.
+// D9 (PA_15) = UART0-RX (Serial debug) -> UART peripheral holds it LOW.
+// D1 (PA_19) = plain GPIO, no alternate function on this board -> safe.
+#define IR_RX_PIN  1   // D1  -> PA_19 (TSOP / VS1838 demodulated output)
+#define IR_TX_PIN 12   // D12 -> PA_12 (IR LED via transistor, 38 kHz PWM)
+
+// =========================================================
 // Timing / Attack Parameters
 // =========================================================
 #define BTN_DEBOUNCE_MS        150
@@ -138,6 +148,11 @@ enum Screen {
   SCR_GAME_INVADERS,     // Jogo Space Invaders
   SCR_GAME_DOOM,         // Jogo DOOM 3D Raycaster
   SCR_GAME_SNAKE,        // Jogo Snake Arcade
+  SCR_IR_MENU,           // Hub do Controle IR
+  SCR_IR_RECORD,         // Gravar sinal IR
+  SCR_IR_LIST,           // Lista de sinais salvos
+  SCR_IR_DETAIL,         // Detalhe / emitir / excluir
+  SCR_IR_SPAM,           // Spam de codigos IR
   SCR_ABOUT,
 };
 
@@ -154,9 +169,10 @@ enum BeaconMode {
 // =========================================================
 // Menu Labels (defined in ui_state.cpp)
 // =========================================================
-#define MAIN_MENU_LEN 4
+#define MAIN_MENU_LEN 5
 #define WIFI_MENU_LEN 4
 #define GAMES_MENU_LEN 5
+#define IR_MENU_LEN 4
 
 extern const char *MAIN_MENU[];
 extern const char *WIFI_MENU[];

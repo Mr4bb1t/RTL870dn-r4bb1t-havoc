@@ -1,0 +1,6 @@
+main.cpp:40:14:void* app_mbedtls_calloc_func(size_t, size_t)	16	static
+main.cpp:78:6:void main_task()	8	static
+main.cpp:35:6:void initVariant()	0	static
+main.cpp:54:6:void app_mbedtls_rom_init()	8	static
+main.cpp:65:5:int _write(int, char*, unsigned int)	32	static
+main.cpp:98:5:int main()	40	static

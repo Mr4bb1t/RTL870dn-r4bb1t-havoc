@@ -1,0 +1,6 @@
+i2c_slave.c:52:6:I2CISRHandle	56	static
+i2c_slave.c:294:6:i2c_slave_task_thread	56	static
+i2c_slave.c:43:5:I2C_Index_Get	8	static
+i2c_slave.c:215:6:i2c_slave_attach_callbacks	0	static
+i2c_slave.c:226:6:i2cSlaveWrite	32	static
+i2c_slave.c:340:6:i2c_slave_init	40	static

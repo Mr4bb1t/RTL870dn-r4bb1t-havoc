@@ -1,0 +1,10 @@
+I2CIO.cpp:123:9:uint8_t I2CIO::read()	8	static
+I2CIO.cpp:51:1:I2CIO::I2CIO()	0	static
+I2CIO.cpp:88:6:void I2CIO::pinMode(uint8_t, uint8_t)	0	static
+I2CIO.cpp:105:6:void I2CIO::portMode(uint8_t)	0	static
+I2CIO.cpp:123:9:uint8_t I2CIO::read()	0	static
+I2CIO.cpp:142:5:int I2CIO::write(uint8_t)	8	static
+I2CIO.cpp:165:9:uint8_t I2CIO::digitalRead(uint8_t)	16	static
+I2CIO.cpp:182:5:int I2CIO::digitalWrite(uint8_t, uint8_t)	4	static
+I2CIO.cpp:211:6:bool I2CIO::isAvailable(uint8_t)	8	static
+I2CIO.cpp:66:5:int I2CIO::begin(uint8_t, TwoWire*)	8	static

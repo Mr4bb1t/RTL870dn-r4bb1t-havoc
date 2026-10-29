@@ -1,0 +1,31 @@
+BLERemoteCharacteristic.cpp:19:22:BLERemoteDescriptor* BLERemoteCharacteristic::getDescriptor(BLEUUID)	96	static
+BLERemoteCharacteristic.cpp:15:22:BLERemoteDescriptor* BLERemoteCharacteristic::getDescriptor(const char*)	160	static
+BLERemoteCharacteristic.cpp:33:9:BLEUUID BLERemoteCharacteristic::getUUID()	8	static
+BLERemoteCharacteristic.cpp:37:6:void BLERemoteCharacteristic::setBufferLen(uint16_t)	16	static
+BLERemoteCharacteristic.cpp:51:10:uint16_t BLERemoteCharacteristic::getBufferLen()	0	static
+BLERemoteCharacteristic.cpp:55:6:bool BLERemoteCharacteristic::canRead()	0	static
+BLERemoteCharacteristic.cpp:59:6:bool BLERemoteCharacteristic::canWrite()	0	static
+BLERemoteCharacteristic.cpp:63:6:bool BLERemoteCharacteristic::canNotify()	0	static
+BLERemoteCharacteristic.cpp:67:6:bool BLERemoteCharacteristic::canIndicate()	0	static
+BLERemoteCharacteristic.cpp:71:10:uint16_t BLERemoteCharacteristic::getProperties()	0	static
+BLERemoteCharacteristic.cpp:129:6:bool BLERemoteCharacteristic::setData(uint8_t*, uint16_t)	32	static
+BLERemoteCharacteristic.cpp:107:6:bool BLERemoteCharacteristic::writeString(const char*)	16	static
+BLERemoteCharacteristic.cpp:103:6:bool BLERemoteCharacteristic::writeString(String)	16	static
+BLERemoteCharacteristic.cpp:111:6:bool BLERemoteCharacteristic::writeData8(uint8_t)	16	static
+BLERemoteCharacteristic.cpp:115:6:bool BLERemoteCharacteristic::writeData16(uint16_t)	16	static
+BLERemoteCharacteristic.cpp:119:6:bool BLERemoteCharacteristic::writeData32(uint32_t)	16	static
+BLERemoteCharacteristic.cpp:123:6:bool BLERemoteCharacteristic::writeData32(int)	16	static
+BLERemoteCharacteristic.cpp:153:10:uint16_t BLERemoteCharacteristic::getData(uint8_t*, uint16_t)	24	static
+BLERemoteCharacteristic.cpp:77:8:String BLERemoteCharacteristic::readString()	24	dynamic
+BLERemoteCharacteristic.cpp:83:9:uint8_t BLERemoteCharacteristic::readData8()	16	static
+BLERemoteCharacteristic.cpp:89:10:uint16_t BLERemoteCharacteristic::readData16()	16	static
+BLERemoteCharacteristic.cpp:95:10:uint32_t BLERemoteCharacteristic::readData32()	16	static
+BLERemoteCharacteristic.cpp:184:6:void BLERemoteCharacteristic::enableNotifyIndicate(bool)	24	static
+BLERemoteCharacteristic.cpp:197:6:void BLERemoteCharacteristic::disableNotifyIndicate()	16	static
+BLERemoteCharacteristic.cpp:209:6:void BLERemoteCharacteristic::setNotifyCallback(void (*)(BLERemoteCharacteristic*, uint8_t*, uint16_t))	0	static
+BLERemoteCharacteristic.cpp:215:1:BLERemoteCharacteristic::BLERemoteCharacteristic(BLEUUID)	24	static
+BLERemoteCharacteristic.cpp:222:1:BLERemoteCharacteristic::~BLERemoteCharacteristic()	24	static
+BLERemoteCharacteristic.cpp:233:6:bool BLERemoteCharacteristic::addDescriptor(BLERemoteDescriptor*)	8	static
+BLERemoteCharacteristic.cpp:243:6:void BLERemoteCharacteristic::clientReadResultCallbackDefault(uint8_t, uint16_t, uint16_t, uint16_t, uint8_t*)	24	static
+BLERemoteCharacteristic.cpp:265:6:void BLERemoteCharacteristic::clientWriteResultCallbackDefault(uint8_t, T_GATT_WRITE_TYPE, uint16_t, uint16_t, uint8_t)	20	static
+BLERemoteCharacteristic.cpp:280:14:T_APP_RESULT BLERemoteCharacteristic::clientNotifyIndicateCallbackDefault(uint8_t, bool, uint16_t, uint16_t, uint8_t*)	16	static

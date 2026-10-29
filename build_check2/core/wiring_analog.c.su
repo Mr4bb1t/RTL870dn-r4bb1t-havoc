@@ -1,0 +1,11 @@
+wiring_analog.c:225:6:_tone_timer_handler	16	static
+wiring_analog.c:58:6:analogReadResolution	8	static
+wiring_analog.c:67:6:analogWriteResolution	0	static
+wiring_analog.c:71:6:analogWritePeriod	0	static
+wiring_analog.c:88:6:analogReference	0	static
+wiring_analog.c:92:6:analogSet	0	static
+wiring_analog.c:98:10:analogRead	40	static
+wiring_analog.c:178:6:analogOutputInit	0	static
+wiring_analog.c:186:6:analogWrite	32	static
+wiring_analog.c:237:6:_tone	32	static
+wiring_analog.c:283:6:noTone	0	static

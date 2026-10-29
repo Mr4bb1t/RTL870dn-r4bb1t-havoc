@@ -1,0 +1,2 @@
+wiring_shift.c:25:10:shiftIn	24	static
+wiring_shift.c:45:6:shiftOut	32	static

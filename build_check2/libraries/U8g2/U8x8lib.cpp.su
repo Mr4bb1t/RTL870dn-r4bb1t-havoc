@@ -1,0 +1,25 @@
+U8x8lib.h:336:12:virtual size_t U8X8::write(const uint8_t*, size_t)	24	static
+U8x8lib.cpp:733:13:void arduino_hw_spi_3w_flush()	24	static
+U8x8lib.cpp:73:8:virtual size_t U8X8::write(uint8_t)	16	static
+U8x8lib.cpp:98:20:uint8_t u8x8_gpio_and_delay_arduino(u8x8_t*, uint8_t, uint8_t, void*)	16	static
+U8x8lib.cpp:372:11:uint8_t u8x8_byte_arduino_3wire_sw_spi(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:707:11:uint8_t u8x8_byte_arduino_4wire_sw_spi(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:773:20:uint8_t u8x8_byte_arduino_3wire_hw_spi(u8x8_t*, uint8_t, uint8_t, void*)	48	static
+U8x8lib.cpp:889:20:uint8_t u8x8_byte_arduino_hw_spi(u8x8_t*, uint8_t, uint8_t, void*)	24	static
+U8x8lib.cpp:1020:20:uint8_t u8x8_byte_arduino_2nd_hw_spi(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:1128:20:uint8_t u8x8_byte_arduino_sw_i2c(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:1389:20:uint8_t u8x8_byte_arduino_2nd_hw_i2c(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:1550:20:uint8_t u8x8_byte_arduino_8bit_8080mode(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:1679:20:uint8_t u8x8_byte_arduino_ks0108(u8x8_t*, uint8_t, uint8_t, void*)	0	static
+U8x8lib.cpp:1700:6:void u8x8_SetPin_4Wire_SW_SPI(u8x8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	8	static
+U8x8lib.cpp:1723:6:void u8x8_SetPin_3Wire_SW_SPI(u8x8_t*, uint8_t, uint8_t, uint8_t, uint8_t)	4	static
+U8x8lib.cpp:1747:6:void u8x8_SetPin_3Wire_HW_SPI(u8x8_t*, uint8_t, uint8_t)	0	static
+U8x8lib.cpp:1756:6:void u8x8_SetPin_4Wire_HW_SPI(u8x8_t*, uint8_t, uint8_t, uint8_t)	0	static
+U8x8lib.cpp:1763:6:void u8x8_SetPin_ST7920_HW_SPI(u8x8_t*, uint8_t, uint8_t)	0	static
+U8x8lib.cpp:1783:6:void u8x8_SetPin_SW_I2C(u8x8_t*, uint8_t, uint8_t, uint8_t)	0	static
+U8x8lib.cpp:1802:6:void u8x8_SetPin_HW_I2C(u8x8_t*, uint8_t, uint8_t, uint8_t)	0	static
+U8x8lib.cpp:1809:6:void u8x8_SetPin_8Bit_6800(u8x8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	20	static
+U8x8lib.cpp:1847:6:void u8x8_SetPin_8Bit_8080(u8x8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	20	static
+U8x8lib.cpp:1885:6:void u8x8_SetPin_KS0108(u8x8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	24	static
+U8x8lib.cpp:1903:6:void u8x8_SetPin_SED1520(u8x8_t*, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	20	static
+U8x8lib.cpp:1340:20:uint8_t u8x8_byte_arduino_hw_i2c(u8x8_t*, uint8_t, uint8_t, void*)	8	static

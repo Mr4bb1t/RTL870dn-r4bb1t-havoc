@@ -18,6 +18,7 @@
 #include "ui_display.h"
 #include "ui_state.h"
 #include "system_mode.h"
+#include "ir_remote.h"
 #include "debug.h"
 #include <Wire.h>
 
@@ -62,6 +63,9 @@ void setup() {
   display.begin();
   display.setContrast(220);
   DEBUG_SER_PRINT("[OK] Display.begin() concluido com sucesso!\n");
+
+  // IR remote (receiver capture + 38 kHz emitter + persistent storage)
+  ir_init();
 
   current_screen = SCR_SPLASH;
   DEBUG_SER_PRINT("[OK] Splash animado iniciando...\n");
@@ -131,6 +135,7 @@ void loop() {
   check_serial_commands();
   tick_anim();
   handle_input();
+  ir_tick();
 
   // O scheduler do beacon controla o proprio ritmo (1 beacon por vez,
   // round-robin). Chamar sem gate deixa o loop livre entre os beacons e

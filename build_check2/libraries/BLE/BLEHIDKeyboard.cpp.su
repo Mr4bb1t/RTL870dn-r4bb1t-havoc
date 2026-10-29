@@ -1,0 +1,13 @@
+BLEHIDKeyboard.cpp:13:1:BLEHIDKeyboard::BLEHIDKeyboard()	8	static
+BLEHIDKeyboard.cpp:18:6:void BLEHIDKeyboard::setReportID(uint8_t, uint8_t)	0	static
+BLEHIDKeyboard.cpp:23:6:void BLEHIDKeyboard::consumerReport(uint16_t)	24	static
+BLEHIDKeyboard.cpp:27:6:void BLEHIDKeyboard::keyboardReport()	16	static
+BLEHIDKeyboard.cpp:31:6:void BLEHIDKeyboard::keyboardReport(uint8_t, uint8_t*)	16	static
+BLEHIDKeyboard.cpp:37:6:void BLEHIDKeyboard::consumerPress(uint16_t)	24	static
+BLEHIDKeyboard.cpp:41:6:void BLEHIDKeyboard::consumerRelease()	24	static
+BLEHIDKeyboard.cpp:45:6:void BLEHIDKeyboard::keyPress(uint16_t)	24	static
+BLEHIDKeyboard.cpp:67:6:void BLEHIDKeyboard::keyRelease(uint16_t)	24	static
+BLEHIDKeyboard.cpp:84:6:void BLEHIDKeyboard::keyReleaseAll()	24	static
+BLEHIDKeyboard.cpp:89:6:void BLEHIDKeyboard::keyCharPress(char)	24	static
+BLEHIDKeyboard.cpp:102:6:void BLEHIDKeyboard::keySequence(const char*, uint16_t)	16	static
+BLEHIDKeyboard.cpp:117:6:void BLEHIDKeyboard::keySequence(String, uint16_t)	0	static

@@ -10,8 +10,9 @@
 #include "debug.h"
 #include "system_mode.h"
 #include "games.h"
+#include "ir_remote.h"
 
-const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Retro Games", "Device Info"};
+const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Retro Games", "IR Remote", "Device Info"};
 const char* WIFI_MENU[] = {"Deauth Attack", "Beacon Flood", "Rescan WiFi", "< Back"};
 
 const AboutItem ABOUT_ITEMS[] = {
@@ -231,7 +232,13 @@ void handle_input() {
           games_menu_cur_x    = 0;
           games_menu_target_x = 0;
         }
-        else if (menu_sel == 3) { 
+        else if (menu_sel == 3) {
+          current_screen     = SCR_IR_MENU;
+          menu_sel           = 0;
+          ir_menu_cur_x      = 0;
+          ir_menu_target_x   = 0;
+        }
+        else if (menu_sel == 4) {
           current_screen = SCR_ABOUT; 
           about_sel = 0; 
           about_scroll = 0; 
@@ -570,7 +577,7 @@ void handle_input() {
         } else if (about_sel == ABOUT_ITEMS_COUNT - 1) {
           // Opção [VOLTAR AO MENU]
           current_screen = SCR_MAIN_MENU;
-          menu_sel = 3;
+          menu_sel = 4;
         }
       }
       else if (up) {
@@ -591,7 +598,7 @@ void handle_input() {
       }
       else if (left) {
         current_screen = SCR_MAIN_MENU;
-        menu_sel = 3;
+        menu_sel = 4;
       }
       break;
 
@@ -638,6 +645,14 @@ void handle_input() {
 
     case SCR_GAME_SNAKE:
       handle_snake_input(up, dn, left, right, enter);
+      break;
+
+    case SCR_IR_MENU:
+    case SCR_IR_RECORD:
+    case SCR_IR_LIST:
+    case SCR_IR_DETAIL:
+    case SCR_IR_SPAM:
+      ir_handle_input(up, dn, left, right, enter);
       break;
 
     default: break;

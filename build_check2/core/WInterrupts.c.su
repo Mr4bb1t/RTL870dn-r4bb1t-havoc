@@ -1,0 +1,2 @@
+WInterrupts.c:3:6:attachInterrupt	16	static
+WInterrupts.c:36:6:detachInterrupt	0	static

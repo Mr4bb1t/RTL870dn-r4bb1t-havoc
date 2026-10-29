@@ -1,0 +1,18 @@
+Stream.cpp:32:5:int Stream::timedRead()	8	static
+Stream.cpp:43:5:int Stream::timedPeek()	8	static
+Stream.cpp:55:5:int Stream::peekNextDigit()	8	static
+Stream.cpp:69:6:void Stream::setTimeout(long unsigned int)	0	static
+Stream.cpp:113:6:long int Stream::parseInt(char)	24	static
+Stream.cpp:107:6:long int Stream::parseInt()	0	static
+Stream.cpp:151:7:float Stream::parseFloat(char)	40	static
+Stream.cpp:145:7:float Stream::parseFloat()	0	static
+Stream.cpp:202:8:size_t Stream::readBytes(char*, size_t)	24	static
+Stream.cpp:218:8:size_t Stream::readBytesUntil(char, char*, size_t)	24	static
+Stream.cpp:230:8:String Stream::readString()	16	static
+Stream.cpp:240:8:String Stream::readStringUntil(char)	16	static
+Stream.cpp:250:5:int Stream::findMulti(Stream::MultiTarget*, int)	48	static
+Stream.cpp:93:6:bool Stream::findUntil(char*, size_t, char*, size_t)	24	static
+Stream.cpp:75:7:bool Stream::find(char*)	16	static
+Stream.cpp:81:6:bool Stream::find(char*, size_t)	0	static
+Stream.cpp:93:6:bool Stream::findUntil(char*, size_t, char*, size_t)	40	static
+Stream.cpp:86:7:bool Stream::findUntil(char*, char*)	32	static

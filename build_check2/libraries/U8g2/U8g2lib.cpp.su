@@ -1,0 +1,5 @@
+U8g2lib.cpp:45:6:void u8g2_print_callback(const char*)	0	static
+U8g2lib.cpp:51:6:void U8G2::writeBufferPBM(Print&)	0	static
+U8g2lib.cpp:57:6:void U8G2::writeBufferXBM(Print&)	0	static
+U8g2lib.cpp:63:6:void U8G2::writeBufferPBM2(Print&)	0	static
+U8g2lib.cpp:69:6:void U8G2::writeBufferXBM2(Print&)	0	static

@@ -1,0 +1,14 @@
+LiquidCrystal_I2C.cpp:157:6:virtual void LiquidCrystal_I2C::setBacklightPin(uint8_t, t_backlighPol)	4	static
+LiquidCrystal_I2C.cpp:166:6:virtual void LiquidCrystal_I2C::setBacklight(uint8_t)	0	static
+LiquidCrystal_I2C.cpp:96:1:LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t)	24	static
+LiquidCrystal_I2C.cpp:102:1:LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t, uint8_t, t_backlighPol)	32	static
+LiquidCrystal_I2C.cpp:109:1:LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t, uint8_t, uint8_t, uint8_t)	32	static
+LiquidCrystal_I2C.cpp:115:1:LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, t_backlighPol)	40	static
+LiquidCrystal_I2C.cpp:123:1:LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	48	static
+LiquidCrystal_I2C.cpp:130:1:LiquidCrystal_I2C::LiquidCrystal_I2C(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, t_backlighPol)	56	static
+LiquidCrystal_I2C.cpp:193:5:int LiquidCrystal_I2C::init(TwoWire*)	16	static
+LiquidCrystal_I2C.cpp:144:6:virtual void LiquidCrystal_I2C::begin(uint8_t, uint8_t, uint8_t, TwoWire&)	24	static
+LiquidCrystal_I2C.cpp:212:6:void LiquidCrystal_I2C::config(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t)	20	static
+LiquidCrystal_I2C.cpp:286:6:void LiquidCrystal_I2C::pulseEnable(uint8_t)	16	static
+LiquidCrystal_I2C.cpp:258:6:void LiquidCrystal_I2C::write4bits(uint8_t, uint8_t)	12	static
+LiquidCrystal_I2C.cpp:239:6:virtual void LiquidCrystal_I2C::send(uint8_t, uint8_t)	16	static

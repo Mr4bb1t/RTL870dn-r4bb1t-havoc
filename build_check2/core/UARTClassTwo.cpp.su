@@ -1,0 +1,14 @@
+UARTClassTwo.h:28:14:virtual void UARTClassTwo::begin(uint32_t)	0	static
+UARTClassTwo.h:38:9:virtual UARTClassTwo::operator bool()	0	static
+UARTClassTwo.cpp:209:5:virtual int UARTClassTwo::available()	0	static
+UARTClassTwo.cpp:213:5:virtual int UARTClassTwo::peek()	0	static
+UARTClassTwo.cpp:220:5:virtual int UARTClassTwo::read()	0	static
+UARTClassTwo.cpp:231:6:virtual void UARTClassTwo::flush()	0	static
+UARTClassTwo.cpp:84:6:virtual void UARTClassTwo::begin(uint32_t, uint8_t)	16	static
+UARTClassTwo.cpp:43:13:void arduino_uart_irq_handler(uint32_t, SerialIrq)	8	static
+UARTClassTwo.cpp:202:6:virtual void UARTClassTwo::end()	0	static
+UARTClassTwo.cpp:241:8:virtual size_t UARTClassTwo::write(uint8_t)	8	static
+UARTClassTwo.cpp:53:1:UARTClassTwo::UARTClassTwo(RingBuffer*)	8	static
+UARTClassTwo.cpp:62:6:void UARTClassTwo::IrqHandler()	16	static
+UARTClassTwo.cpp:249:6:bool Serial1_available()	0	static
+UARTClassTwo.cpp:251:1:cpp)	8	static

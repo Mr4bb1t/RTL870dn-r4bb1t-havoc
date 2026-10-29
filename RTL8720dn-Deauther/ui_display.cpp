@@ -4,6 +4,7 @@
 
 #include "animations/animations.h"
 #include "ble_spam.h"
+#include "ir_remote.h"
 #include "ui_display.h"
 #include "ui_state.h"
 #include "wifi_attacks.h"
@@ -133,6 +134,18 @@ void tick_anim() {
       if (step == 0)
         step = (diff > 0) ? 1 : -1;
       games_menu_cur_x += step;
+    }
+  }
+
+  // Slide animation for lateral IR menu
+  if (current_screen == SCR_IR_MENU) {
+    ir_menu_target_x = menu_sel * 128;
+    if (ir_menu_cur_x != ir_menu_target_x) {
+      int diff = ir_menu_target_x - ir_menu_cur_x;
+      int step = diff / 3;
+      if (step == 0)
+        step = (diff > 0) ? 1 : -1;
+      ir_menu_cur_x += step;
     }
   }
 }
@@ -300,6 +313,8 @@ void render_main_menu() {
                      anim_bluetooth_48x48[center_anim_frame % 14]);
   } else if (menu_sel == 2) {
     display.drawXBMP(40, 0, 48, 48, icon_games_48x48);
+  } else if (menu_sel == 3) {
+    display.drawXBMP(40, 0, 48, 48, anim_tv_48x48[center_anim_frame % 14]);
   } else {
     display.drawXBMP(40, 0, 48, 48, icon_about_48x48);
   }
@@ -309,8 +324,9 @@ void render_main_menu() {
   draw_str_centered(51, MAIN_MENU[menu_sel], 1);
 
   // Balanced Pagination Pills at Y=58
+  int dots_start = 64 - ((MAIN_MENU_LEN * 9) - 4) / 2;
   for (int i = 0; i < MAIN_MENU_LEN; i++) {
-    int dot_x = 48 + i * 9;
+    int dot_x = dots_start + i * 9;
     if (i == menu_sel) {
       display.drawRBox(dot_x - 1, 58, 8, 3, 1);
     } else {
@@ -1150,6 +1166,21 @@ void render_screen() {
     break;
   case SCR_GAME_SNAKE:
     render_game_snake();
+    break;
+  case SCR_IR_MENU:
+    render_ir_menu();
+    break;
+  case SCR_IR_RECORD:
+    render_ir_record();
+    break;
+  case SCR_IR_LIST:
+    render_ir_list();
+    break;
+  case SCR_IR_DETAIL:
+    render_ir_detail();
+    break;
+  case SCR_IR_SPAM:
+    render_ir_spam();
     break;
   case SCR_ABOUT:
     render_about();

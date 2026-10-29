@@ -1,0 +1,28 @@
+Wire.cpp:206:8:virtual size_t TwoWire::write(uint8_t)	0	static
+Wire.cpp:214:8:virtual size_t TwoWire::write(const uint8_t*, size_t)	16	static
+Wire.cpp:224:5:virtual int TwoWire::available()	0	static
+Wire.cpp:228:5:virtual int TwoWire::read()	0	static
+Wire.cpp:235:5:virtual int TwoWire::peek()	0	static
+Wire.cpp:242:6:virtual void TwoWire::flush()	0	static
+Wire.cpp:258:6:static void TwoWire::onReceiveService(uint8_t*, size_t, bool, void*)	16	static
+Wire.cpp:273:6:static void TwoWire::onRequestService(void*)	8	static
+Wire.cpp:40:1:TwoWire::TwoWire(uint32_t, uint32_t)	16	static
+Wire.cpp:54:6:void TwoWire::begin()	8	static
+Wire.cpp:81:6:void TwoWire::begin(uint8_t)	24	static
+Wire.cpp:114:6:void TwoWire::begin(int)	0	static
+Wire.cpp:118:6:void TwoWire::end()	0	static
+Wire.cpp:122:6:void TwoWire::setClock(uint32_t)	0	static
+Wire.cpp:127:9:uint8_t TwoWire::requestFrom(uint8_t, uint8_t, uint8_t)	32	static
+Wire.cpp:150:9:uint8_t TwoWire::requestFrom(uint8_t, uint8_t)	0	static
+Wire.cpp:154:9:uint8_t TwoWire::requestFrom(int, int)	0	static
+Wire.cpp:158:9:uint8_t TwoWire::requestFrom(int, int, int)	0	static
+Wire.cpp:162:6:void TwoWire::beginTransmission(uint8_t)	8	static
+Wire.cpp:172:6:void TwoWire::beginTransmission(int)	8	static
+Wire.cpp:187:9:uint8_t TwoWire::endTransmission(uint8_t)	16	static
+Wire.cpp:202:9:uint8_t TwoWire::endTransmission()	0	static
+Wire.cpp:247:8:size_t TwoWire::slaveWrite(int)	16	static
+Wire.cpp:251:8:size_t TwoWire::slaveWrite(char*)	8	static
+Wire.cpp:255:8:size_t TwoWire::slaveWrite(uint8_t*, size_t)	8	static
+Wire.cpp:286:6:void TwoWire::onReceive(void (*)(int))	0	static
+Wire.cpp:290:6:void TwoWire::onRequest(void (*)())	0	static
+Wire.cpp:313:41:cpp)	12	static

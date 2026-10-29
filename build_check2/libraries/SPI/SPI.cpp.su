@@ -1,0 +1,23 @@
+SPI.cpp:31:1:SPIClass::SPIClass(void*, int, int, int, int)	16	static
+SPI.cpp:53:6:void SPIClass::beginTransaction(uint8_t, SPISettings)	16	static
+SPI.cpp:68:6:void SPIClass::beginTransaction(SPISettings)	8	static
+SPI.cpp:72:6:void SPIClass::endTransaction()	0	static
+SPI.cpp:80:6:void SPIClass::begin()	32	static
+SPI.cpp:114:6:void SPIClass::begin(int)	32	static
+SPI.cpp:150:6:void SPIClass::begin(char)	32	static
+SPI.cpp:194:6:void SPIClass::begin(int, char)	32	static
+SPI.cpp:240:6:void SPIClass::end()	8	static
+SPI.cpp:247:6:byte SPIClass::transfer(byte, uint8_t, SPITransferMode)	32	static
+SPI.cpp:280:6:byte SPIClass::transfer(uint8_t, SPITransferMode)	8	static
+SPI.cpp:306:6:void SPIClass::transfer(byte, void*, size_t, SPITransferMode)	24	static
+SPI.cpp:319:6:void SPIClass::transfer(void*, size_t, SPITransferMode)	16	static
+SPI.cpp:323:10:uint16_t SPIClass::transfer16(byte, uint16_t, SPITransferMode)	24	static
+SPI.cpp:338:10:uint16_t SPIClass::transfer16(uint16_t, SPITransferMode)	0	static
+SPI.cpp:342:6:void SPIClass::setBitOrder(uint8_t, BitOrder)	0	static
+SPI.cpp:348:6:void SPIClass::setBitOrder(BitOrder)	0	static
+SPI.cpp:353:6:void SPIClass::setDataMode(uint8_t, uint8_t)	0	static
+SPI.cpp:361:6:void SPIClass::setDataMode(uint8_t)	4	static
+SPI.cpp:365:6:void SPIClass::setClockDivider(uint8_t, uint8_t)	0	static
+SPI.cpp:372:6:void SPIClass::setClockDivider(uint8_t)	0	static
+SPI.cpp:378:6:void SPIClass::setDefaultFrequency(int)	0	static
+SPI.cpp:393:72:cpp)	20	static

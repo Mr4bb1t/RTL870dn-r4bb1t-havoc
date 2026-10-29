@@ -1,0 +1,9 @@
+BLEHIDMouse.cpp:11:1:BLEHIDMouse::BLEHIDMouse()	4	static
+BLEHIDMouse.cpp:15:6:void BLEHIDMouse::setReportID(uint8_t)	0	static
+BLEHIDMouse.cpp:19:6:void BLEHIDMouse::mouseReport(hid_mouse_report_t*)	16	static
+BLEHIDMouse.cpp:23:6:void BLEHIDMouse::mouseReport(uint8_t, int8_t, int8_t, int8_t)	40	static
+BLEHIDMouse.cpp:33:6:void BLEHIDMouse::mousePress(uint8_t)	32	static
+BLEHIDMouse.cpp:41:6:void BLEHIDMouse::mouseRelease(uint8_t)	32	static
+BLEHIDMouse.cpp:49:6:void BLEHIDMouse::mouseReleaseAll()	24	static
+BLEHIDMouse.cpp:53:6:void BLEHIDMouse::mouseMove(int8_t, int8_t)	32	static
+BLEHIDMouse.cpp:57:6:void BLEHIDMouse::mouseScroll(int8_t)	32	static

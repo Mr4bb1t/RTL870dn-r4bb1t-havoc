@@ -1,0 +1,9 @@
+IPv6Address.h:49:17:IPv6Address::~IPv6Address()	0	static
+IPv6Address.cpp:66:8:virtual size_t IPv6Address::printTo(Print&) const	24	static
+IPv6Address.h:49:17:virtual IPv6Address::~IPv6Address()	8	static
+IPv6Address.cpp:32:1:IPv6Address::IPv6Address()	8	static
+IPv6Address.cpp:37:1:IPv6Address::IPv6Address(const uint8_t*)	8	static
+IPv6Address.cpp:42:1:IPv6Address::IPv6Address(const uint32_t*)	8	static
+IPv6Address.cpp:47:14:IPv6Address& IPv6Address::operator=(const uint8_t*)	8	static
+IPv6Address.cpp:53:14:IPv6Address& IPv6Address::operator=(uint32_t)	16	static
+IPv6Address.cpp:60:6:bool IPv6Address::operator==(const uint8_t*) const	8	static

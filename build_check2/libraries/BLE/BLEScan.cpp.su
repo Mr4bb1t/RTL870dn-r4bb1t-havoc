@@ -1,0 +1,11 @@
+BLEScan.cpp:29:1:BLEScan::BLEScan()	12	static
+BLEScan.cpp:33:6:void BLEScan::updateScanParams()	8	static
+BLEScan.cpp:48:6:void BLEScan::startScan()	16	static
+BLEScan.cpp:62:6:void BLEScan::stopScan()	8	static
+BLEScan.cpp:41:6:void BLEScan::startScan(uint32_t)	16	static
+BLEScan.cpp:71:6:void BLEScan::setScanMode(uint8_t)	0	static
+BLEScan.cpp:79:6:void BLEScan::setScanInterval(uint16_t)	0	static
+BLEScan.cpp:85:6:void BLEScan::setScanWindow(uint16_t)	4	static
+BLEScan.cpp:95:6:void BLEScan::setScanDuplicateFilter(bool)	0	static
+BLEScan.cpp:103:6:bool BLEScan::scanInProgress()	0	static
+BLEScan.cpp:110:6:void BLEScan::printScanInfo(T_LE_CB_DATA*)	128	static

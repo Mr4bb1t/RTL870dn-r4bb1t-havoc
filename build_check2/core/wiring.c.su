@@ -1,0 +1,4 @@
+wiring.c:40:6:delay	0	static
+wiring.c:76:10:millis	0	static
+wiring.c:80:10:micros	16	static
+wiring.c:49:6:delayMicroseconds	16	static

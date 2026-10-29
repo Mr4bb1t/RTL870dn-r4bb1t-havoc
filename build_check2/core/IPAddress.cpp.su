@@ -1,0 +1,10 @@
+IPAddress.cpp:79:8:virtual size_t IPAddress::printTo(Print&) const	32	static
+IPAddress.cpp:33:1:IPAddress::IPAddress()	0	static
+IPAddress.cpp:37:1:IPAddress::IPAddress(uint8_t, uint8_t, uint8_t, uint8_t)	12	static
+IPAddress.cpp:44:1:IPAddress::IPAddress(uint32_t)	0	static
+IPAddress.cpp:48:1:IPAddress::IPAddress(const uint8_t*)	8	static
+IPAddress.cpp:52:12:IPAddress& IPAddress::operator=(const uint8_t*)	8	static
+IPAddress.cpp:57:12:IPAddress& IPAddress::operator=(uint32_t)	0	static
+IPAddress.cpp:62:6:bool IPAddress::operator==(const uint8_t*) const	8	static
+IPAddress.cpp:66:7:char* IPAddress::get_address()	24	static
+IPAddress.cpp:87:1:cpp)	0	static

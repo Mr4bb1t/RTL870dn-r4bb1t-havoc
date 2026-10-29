@@ -1,0 +1,11 @@
+BLESecurity.cpp:19:1:BLESecurity::BLESecurity()	0	static
+BLESecurity.cpp:22:6:void BLESecurity::setPairable(bool)	0	static
+BLESecurity.cpp:30:6:void BLESecurity::setAuthFlags(uint16_t)	0	static
+BLESecurity.cpp:34:6:void BLESecurity::setIOCapability(uint8_t)	0	static
+BLESecurity.cpp:38:6:void BLESecurity::setSecReqEnable(bool)	0	static
+BLESecurity.cpp:46:6:void BLESecurity::setSecReqFlags(uint16_t)	0	static
+BLESecurity.cpp:50:6:void BLESecurity::setStaticPin(uint32_t)	4	static
+BLESecurity.cpp:65:6:void BLESecurity::setPasskeyDisplayCallback(void (*)(uint8_t, uint32_t))	0	static
+BLESecurity.cpp:69:6:void BLESecurity::setPasskeyInputCallback(uint32_t (*)(uint8_t))	0	static
+BLESecurity.cpp:73:6:void BLESecurity::setNumericComparisonCallback(bool (*)(uint8_t, uint32_t))	0	static
+BLESecurity.cpp:77:6:void BLESecurity::setupGAPBondManager()	8	static
