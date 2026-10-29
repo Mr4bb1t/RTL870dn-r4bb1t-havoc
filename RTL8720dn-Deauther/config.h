@@ -23,11 +23,17 @@
 // =========================================================
 // IR Remote Pins
 // =========================================================
-// D5 (PB_2)  = boot strap       -> keeps ROM out of UART download mode.
-// D4 (PA_29) = UART-bridge RX   -> conflicts with USB firmware upload.
-// D9 (PA_15) = UART0-RX (Serial debug) -> UART peripheral holds it LOW.
-// D1 (PA_19) = plain GPIO, no alternate function on this board -> safe.
-#define IR_RX_PIN  1   // D1  -> PA_19 (TSOP / VS1838 demodulated output)
+// PB_2 (D4) is also the boot/download strap, BUT we never configure it as
+// GPIO outside the IR menu. At boot/RESET the pin is in high-Z so the BURN
+// button can pull it LOW without fighting the MCU. pinMode(INPUT_PULLUP) is
+// called only inside ir_start_capture() (on entering the IR menu) and
+// released back to INPUT (tristate) in ir_stop_capture() when leaving.
+//
+// Pins that CANNOT be used as IR_RX on this board:
+//   D5  / PB_2  -- original strap number in some core variants (same physical pin)
+//   D9  / PA_15 -- UART0-RX of Serial: UART peripheral holds it LOW after Serial.begin()
+//   D4  / PA_29 -- UART-bridge RX: conflicts with USB firmware upload in some core variants
+#define IR_RX_PIN  4   // D4  -> PB_2 (TSOP / VS1838 demodulated output, late-armed)
 #define IR_TX_PIN 12   // D12 -> PA_12 (IR LED via transistor, 38 kHz PWM)
 
 // =========================================================

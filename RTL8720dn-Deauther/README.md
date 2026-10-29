@@ -18,7 +18,7 @@ Firmware de auditoria de radiofrequência autônomo para o SoC Realtek RTL8720DN
 | **Interface do Display** | Barramento I2C por hardware operando a 400 kHz (Fast Mode) |
 | **Controlador de Display** | SH1106 OLED monocromático (resolução 128x64 pixels, endereço I2C `0x3C`) |
 | **Entradas de Usuário** | 5 GPIOs em modo `INPUT_PULLUP` ativo-baixo (D-Pad de 5 direções) |
-| **Controle IR** | Receptor TSOP/VS1838 em D9 (PA_15) + emissor 38 kHz em D12 (PA_12) |
+| **Controle IR** | Receptor TSOP/VS1838 em D4 (PB_2, late-armed) + emissor 38 kHz em D12 (PA_12) |
 | **Alimentação** | 3.3V DC regulado (consumo de pico durante transmissão RF de até 450 mA) |
 
 ---
@@ -52,14 +52,35 @@ Todas as entradas utilizam resistores de elevação internos configurados via `p
 
 | Sinal IR | Pino GPIO (RTL8720DN) | Pino Físico BW16 | Descrição |
 |:---|:---:|:---:|:---|
-| **IR_RX** | `PA_15` | D9 | Saída demodulada do receptor TSOP/VS1838 (ativo-baixo, 38 kHz) |
+| **IR_RX** | `PB_2` | D4 | Saída demodulada do receptor TSOP/VS1838 (ativo-baixo, 38 kHz) |
 | **IR_TX** | `PA_12` | D12 | LED IR via transistor NPN/PNP, modulado por PWM de 38 kHz |
 
-- **Receptor:** qualquer módulo TSOP38xx / VS1838B / HX1838. Alimentação em 3.3 V, saída ligada diretamente ao D9 (o módulo já possui pull-up interno).
+- **Receptor:** qualquer módulo TSOP38xx / VS1838B / HX1838. Alimentação em 3.3 V, saída ligada diretamente ao **D4** (o módulo já possui pull-up interno).
 - **Emissor:** LED IR 940 nm em série com resistor (100–220 Ω para 3.3 V) e transistor de chaveamento. O D12 fornece a portadora de 38 kHz; o transistor evita drenar corrente diretamente do GPIO. O nível **alto** do GPIO corresponde à portadora ativa — use um NPN (base via resistor de ~1 kΩ) ou MOSFET de canal N com o LED entre 3.3 V e o dreno/coletor.
 - **Alcance:** depende do LED e do transistor; 1–5 m é típico com LED comum, 5–10 m com LED de alto brilho.
 - **Persistência:** os sinais gravados são armazenados no setor reservado ao usuário da flash (`0x00100000`, biblioteca `FlashMemory` do core AmebaD), sobrevivendo a reboots e regravações normais do sketch.
-- **Modo download:** o `D5 (PB_2)` é o strap de boot/download desta placa. **Nada pode ficar ligado nele** — com um fio no D5 o ROM não entra em modo de gravação (é necessário fechar o jumper no chip e manter esse pino livre). Por isso o receptor usa o D9.
+
+#### Estratégia de ativação tardia do IR_RX (late-arm)
+
+D4 (PB_2) é também o **strap de boot/download** desta placa: para entrar em modo UART de gravação, o botão BURN deve puxar este pino a LOW durante o RESET. Um receptor TSOP em modo idle possui saída push-pull em HIGH, o que briga com o botão BURN e impede a entrada no modo de download.
+
+A solução implementada no firmware é a **ativação tardia (late-arm)**:
+
+| Momento | Estado do pino D4/PB_2 | Efeito |
+|:---|:---:|:---|
+| Boot / RESET / Download mode | `INPUT` (alta impedância) | Botão BURN consegue puxar o pino a LOW sem resistência do MCU |
+| Operação normal (fora do menu IR) | `INPUT` (alta impedância) | Nenhuma influência do MCU no pino |
+| Ao entrar no menu IR (Record) | `INPUT_PULLUP` | Receptor armado para captura de sinais |
+| Ao sair do menu IR | `INPUT` (alta impedância) | Pino liberado de volta |
+
+O `ir_init()` (chamado no `setup()`) **não toca no pino**. O `pinMode(INPUT_PULLUP)` só é aplicado dentro de `ir_start_capture()` ao entrar na tela de gravação, e revertido para `INPUT` em `ir_stop_capture()` ao sair.
+
+#### Pinos que NÃO podem ser usados como IR_RX nesta placa
+
+| Pino | GPIO | Motivo do conflito |
+|:---:|:---:|:---|
+| D9 | PA_15 | **UART0-RX do `Serial`** — ao chamar `Serial.begin()`, o periférico UART toma conta do MUX do pino e o mantém em LOW permanentemente |
+| D1/D4\* | PA_29 | **RX da ponte USB-UART** — conectado ao conversor USB do BW16; um receptor IR neste pino bloqueia o fluxo do bootloader e impede a gravação |
 
 ---
 
@@ -225,7 +246,7 @@ Transmite pacotes de anúncio BLE 5.0 não conectáveis (*Non-Connectable Undire
 O menu principal ganhou um quinto card, **IR Remote**, com ícone animado de televisão (14 frames 48x48). Dentro dele existem três cards: **Record**, **Emit** e **Spam**.
 
 #### 4.5.1 Gravação (Record)
-1. Ao entrar em **Record**, o firmware passa a amostrar o pino `IR_RX` (D9/PA_15) em laço apertado (~0,2 µs por amostra), medindo cada borda com `micros()`.
+1. Ao entrar em **Record**, o firmware arma o pino `IR_RX` (D4/PB_2) com `INPUT_PULLUP` e passa a amostrar em laço apertado (~0,2 µs por amostra), medindo cada borda com `micros()`.
 2. Cada borda registra o intervalo em microssegundos. Intervalos maiores que **15 ms** delimitam o fim de um quadro; o buffer é publicado para a tarefa principal, que:
    - tenta decodificar **NEC** (cabeçalho 9000/4500 µs), **Samsung** (4500/4500 µs) ou **Sony SIRC 12 bits** (2400/600 µs);
    - guarda o endereço/comando decodificados para exibição;

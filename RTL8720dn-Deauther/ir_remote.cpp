@@ -118,6 +118,7 @@ static void ir_store_save() {
 // =============================================================================
 static void decode_current();
 static void ir_debug_dump();
+static void ir_pin_selftest();
 
 int ir_pin_level() { return digitalRead(IR_RX_PIN) ? 1 : 0; }
 
@@ -187,12 +188,16 @@ static bool capture_once() {
 }
 
 void ir_start_capture() {
+  // Arm the pin only NOW (entering the IR menu). This keeps PB_2 in
+  // high-Z (INPUT, no pull) during normal operation so the BURN button
+  // can pull it LOW for UART download mode without fighting the MCU.
   pinMode(IR_RX_PIN, INPUT_PULLUP);
   capture_on = true;
   cap_edges = 0;
   ir_last_status_ms = millis();
 
   delay(2);
+  ir_pin_selftest();   // diagnose wiring now that the pin is armed
   DEBUG_SER_PRINT("[IR] capture armed: pin D");
   DEBUG_SER_PRINT(IR_RX_PIN);
   DEBUG_SER_PRINT(", idle level=");
@@ -203,6 +208,9 @@ void ir_start_capture() {
 void ir_stop_capture() {
   if (capture_on) {
     capture_on = false;
+    // Release PB_2 back to tristate (INPUT, no pull) so the BURN button
+    // can pull it LOW for UART download mode at the next RESET.
+    pinMode(IR_RX_PIN, INPUT);
     DEBUG_SER_PRINT("[IR] capture stopped. edges=");
     DEBUG_SER_PRINT((unsigned)cap_edges);
     DEBUG_SER_PRINT("\n");
@@ -617,15 +625,17 @@ void ir_init() {
   analogWritePeriod(26);          // ~38.4 kHz
   analogWrite(IR_TX_PIN, 0);
 
-  pinMode(IR_RX_PIN, INPUT_PULLUP);
+  // IR_RX_PIN (PB_2 / D4) is intentionally left unconfigured here.
+  // It stays in high-Z (INPUT, no pull) so the BURN button can pull it
+  // LOW at RESET for UART download mode. pinMode(INPUT_PULLUP) is applied
+  // lazily inside ir_start_capture() when the user enters the IR menu.
 
   ir_store_load();
   DEBUG_SER_PRINT("[IR] TX pin D");
   DEBUG_SER_PRINT(IR_TX_PIN);
   DEBUG_SER_PRINT(" (PA_12) 38kHz carrier ready, RX pin D");
   DEBUG_SER_PRINT(IR_RX_PIN);
-  DEBUG_SER_PRINT(" (PA_19)\n");
-  ir_pin_selftest();
+  DEBUG_SER_PRINT(" (PB_2) late-armed on IR menu entry\n");
   DEBUG_SER_PRINT("[IR] Ready. Saved signals: ");
   DEBUG_SER_PRINT((int)saved_n);
   DEBUG_SER_PRINT("\n");
