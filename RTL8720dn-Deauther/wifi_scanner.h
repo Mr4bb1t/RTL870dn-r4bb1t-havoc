@@ -16,11 +16,13 @@ extern std::vector<WiFiScanResult> scan_results;
 extern bool net_marked[MAX_SCAN_RESULTS];
 extern int  net_sel;
 extern int  net_scroll;
-extern bool scan_done;
-extern bool scan_in_progress;
+extern volatile bool scan_done;
+extern volatile bool scan_in_progress;
 
 void startScan();
 void sortScanResults();
+void dumpScanResults();
+int  countSameSSID(const String &ssid);
 rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result);
 
 #endif // WIFI_SCANNER_H

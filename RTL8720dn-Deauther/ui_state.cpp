@@ -12,7 +12,7 @@
 #include "games.h"
 #include "ir_remote.h"
 
-const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "Retro Games", "IR Remote", "Device Info"};
+const char* MAIN_MENU[] = {"WiFi Attacks", "Bluetooth Spam", "IR Remote", "Retro Games", "Device Info"};
 const char* WIFI_MENU[] = {"Deauth Attack", "Beacon Flood", "Rescan WiFi", "< Back"};
 
 const AboutItem ABOUT_ITEMS[] = {
@@ -191,16 +191,20 @@ static void do_scan() {
   DEBUG_SER_PRINT("[SCAN] Iniciando varredura WiFi 2.4G + 5GHz...\n");
   startScan();
   uint32_t start_ms = millis();
-  while (!scan_done && (millis() - start_ms < 5000)) {
+  while (!scan_done && (millis() - start_ms < SCAN_DURATION_MS)) {
     check_serial_commands();
     tick_anim();
     render_screen();
     delay(20);
   }
+  if (!scan_done) {
+    DEBUG_SER_PRINT("[SCAN] Timeout: o driver ainda nao concluiu a varredura.\n");
+  }
   sortScanResults();
   DEBUG_SER_PRINT("[SCAN] Varredura finalizada. Redes encontradas: ");
   DEBUG_SER_PRINT((int)scan_results.size());
   DEBUG_SER_PRINT("\n");
+  dumpScanResults();
   net_sel    = 0;
   net_scroll = 0;
 }
@@ -227,16 +231,16 @@ void handle_input() {
         }
         else if (menu_sel == 1) { current_screen = SCR_BLE_MENU; menu_sel = 0; }
         else if (menu_sel == 2) {
-          current_screen     = SCR_GAMES_MENU;
-          menu_sel           = 0;
-          games_menu_cur_x    = 0;
-          games_menu_target_x = 0;
-        }
-        else if (menu_sel == 3) {
           current_screen     = SCR_IR_MENU;
           menu_sel           = 0;
           ir_menu_cur_x      = 0;
           ir_menu_target_x   = 0;
+        }
+        else if (menu_sel == 3) {
+          current_screen     = SCR_GAMES_MENU;
+          menu_sel           = 0;
+          games_menu_cur_x    = 0;
+          games_menu_target_x = 0;
         }
         else if (menu_sel == 4) {
           current_screen = SCR_ABOUT; 
@@ -301,6 +305,11 @@ void handle_input() {
       if (enter) {
         if (scan_results.empty()) {
           do_scan();
+          // do_scan() deixa current_screen = SCR_SCANNING; sem restaurar,
+          // a tela do radar ficaria sem nenhum case em handle_input().
+          current_screen = SCR_NET_LIST;
+          net_sel        = 0;
+          net_scroll     = 0;
         } else if (!btn_enter_trk.is_repeating && net_sel < (int)scan_results.size()) {
           net_marked[net_sel] = !net_marked[net_sel];
         }
@@ -618,7 +627,7 @@ void handle_input() {
           current_screen = SCR_GAME_SNAKE;
         } else {
           current_screen = SCR_MAIN_MENU;
-          menu_sel       = 2;
+          menu_sel       = 3;
         }
       }
       else if (left || up) {
@@ -658,9 +667,12 @@ void handle_input() {
     default: break;
   }
 
-  // Se houve troca de tela, impede que qualquer tecla que ainda esteja pressionada
-  // dispare na tela recém-carregada até que o usuário a solte
+  // Se houve troca de tela, encerra captura IR pendente se estava em RECORD
+  // para garantir a imediata liberacao do pino PB_2 (RX1 / Burn strap)
   if (current_screen != prev_screen) {
+    if (prev_screen == SCR_IR_RECORD && current_screen != SCR_IR_RECORD) {
+      ir_stop_capture();
+    }
     flush_input();
   }
 }

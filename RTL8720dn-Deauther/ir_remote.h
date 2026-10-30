@@ -56,10 +56,27 @@ bool ir_delete_saved(int idx);
 void ir_emit_saved(int idx);
 void ir_replay_current();
 
+// Spam Modes
+enum IRSpamMode : uint8_t {
+  SPAM_MODE_TV_B_GONE = 0, // TV-B-Gone: varre somente POWER de todas as marcas com progresso
+  SPAM_MODE_ALL_P_V,       // Alterna POWER e VOL+ de todas as marcas
+  SPAM_MODE_MUTE,          // Varre MUTE de todas as marcas
+  SPAM_MODE_VOL_UP,        // Varre VOLUME+ de todas as marcas
+  SPAM_MODE_VOL_DOWN,      // Varre VOLUME- de todas as marcas
+};
+#define SPAM_MODE_COUNT 5
+
 // Spam
 void ir_start_spam();
 void ir_stop_spam();
 bool ir_spam_active();
+void ir_set_spam_mode(uint8_t m);
+uint8_t ir_get_spam_mode();
+const char *ir_get_spam_mode_name(uint8_t m);
+
+// Waveform & Export
+void draw_ir_waveform(int x, int y, int w, int h, const uint16_t *raw, int count);
+void ir_export_flipper();
 
 // UI
 void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter);

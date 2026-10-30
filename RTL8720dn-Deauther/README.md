@@ -18,7 +18,7 @@ Firmware de auditoria de radiofrequência autônomo para o SoC Realtek RTL8720DN
 | **Interface do Display** | Barramento I2C por hardware operando a 400 kHz (Fast Mode) |
 | **Controlador de Display** | SH1106 OLED monocromático (resolução 128x64 pixels, endereço I2C `0x3C`) |
 | **Entradas de Usuário** | 5 GPIOs em modo `INPUT_PULLUP` ativo-baixo (D-Pad de 5 direções) |
-| **Controle IR** | Receptor TSOP/VS1838 em D4 (PB_2, late-armed) + emissor 38 kHz em D12 (PA_12) |
+| **Controle IR** | Receptor TSOP/VS1838 em PB_2 (RX1 / D5, late-armed) + emissor 38 kHz em D12 (PA_12) |
 | **Alimentação** | 3.3V DC regulado (consumo de pico durante transmissão RF de até 450 mA) |
 
 ---
@@ -48,30 +48,37 @@ Todas as entradas utilizam resistores de elevação internos configurados via `p
 
 *Debounce:* Implementado por software na máquina de estados com janela de bloqueio de 150 ms para eliminar repiques mecânicos.
 
-### 2.3 Controle IR (Receptor + Emissor)
+### 2.3 Controle IR (Receptor + Emissor) e Compartilhamento de PB_2 (RX1 / Download)
 
 | Sinal IR | Pino GPIO (RTL8720DN) | Pino Físico BW16 | Descrição |
 |:---|:---:|:---:|:---|
-| **IR_RX** | `PB_2` | D4 | Saída demodulada do receptor TSOP/VS1838 (ativo-baixo, 38 kHz) |
+| **IR_RX** | `PB_2` | RX1 / D5 (PB2) | Saída demodulada do receptor TSOP/VS1838 (ativo-baixo, 38 kHz) / LP_UART_RX |
 | **IR_TX** | `PA_12` | D12 | LED IR via transistor NPN/PNP, modulado por PWM de 38 kHz |
 
-- **Receptor:** qualquer módulo TSOP38xx / VS1838B / HX1838. Alimentação em 3.3 V, saída ligada diretamente ao **D4** (o módulo já possui pull-up interno).
-- **Emissor:** LED IR 940 nm em série com resistor (100–220 Ω para 3.3 V) e transistor de chaveamento. O D12 fornece a portadora de 38 kHz; o transistor evita drenar corrente diretamente do GPIO. O nível **alto** do GPIO corresponde à portadora ativa — use um NPN (base via resistor de ~1 kΩ) ou MOSFET de canal N com o LED entre 3.3 V e o dreno/coletor.
-- **Alcance:** depende do LED e do transistor; 1–5 m é típico com LED comum, 5–10 m com LED de alto brilho.
+- **Receptor:** qualquer módulo TSOP38xx / VS1838B / HX1838. Alimentação em 3.3 V, saída ligada ao pino **PB_2** (RX1 / D5).
+- **Emissor:** LED IR 940 nm em série com resistor (100–220 Ω para 3.3 V) e transistor de chaveamento. O D12 fornece a portadora de 38 kHz; o transistor evita drenar corrente diretamente do GPIO.
 - **Persistência:** os sinais gravados são armazenados no setor reservado ao usuário da flash (`0x00100000`, biblioteca `FlashMemory` do core AmebaD), sobrevivendo a reboots e regravações normais do sketch.
+- **Visualizador de Forma de Onda (Waveform):** O OLED desenha os pulsos reais (marks e spaces) como um osciloscópio digital logo após a captura ou na inspeção de sinais salvos.
+- **Suíte de Ataques IR / TV-B-Gone:** Modos alternáveis em tempo real via direcional UP/DOWN:
+  1. **TV-B-GONE:** Varredura rápida de desligamento (POWER) de todas as marcas com barra de progresso gráfica de 0 a 100%.
+  2. **ALL (PWR+VOL):** Alterna Power e Volume+ sequencialmente.
+  3. **MUTE SPAM:** Disparo contínuo de Mute.
+  4. **VOL+ / VOL- SPAM:** Variação contínua de volume.
+- **Marcas incluídas na base:** Samsung, LG TV, Sony, TCL, AOC, Philips, Toshiba/Semp, Philco, Panasonic e Multilaser.
+- **Exportação Flipper Zero (`.ir`):** Envie `ir export` ou `ir dump` no Serial Monitor para exportar todos os sinais no formato padrão de arquivos `.ir` do Flipper Zero.
 
-#### Estratégia de ativação tardia do IR_RX (late-arm)
+#### Gerenciamento Meticuloso de PB_2 (IR_RX vs. RX1 Download Mode)
 
-D4 (PB_2) é também o **strap de boot/download** desta placa: para entrar em modo UART de gravação, o botão BURN deve puxar este pino a LOW durante o RESET. Um receptor TSOP em modo idle possui saída push-pull em HIGH, o que briga com o botão BURN e impede a entrada no modo de download.
+O pino **PB_2** é simultaneamente o **strap de boot/download**, a linha **RX1** (`LP_UART_RX`) usada pelo bootloader para gravação UART e a entrada do receptor infravermelho.
 
-A solução implementada no firmware é a **ativação tardia (late-arm)**:
+Para garantir que um **não derrube o outro**, o firmware adota uma política estrita:
 
-| Momento | Estado do pino D4/PB_2 | Efeito |
-|:---|:---:|:---|
-| Boot / RESET / Download mode | `INPUT` (alta impedância) | Botão BURN consegue puxar o pino a LOW sem resistência do MCU |
-| Operação normal (fora do menu IR) | `INPUT` (alta impedância) | Nenhuma influência do MCU no pino |
-| Ao entrar no menu IR (Record) | `INPUT_PULLUP` | Receptor armado para captura de sinais |
-| Ao sair do menu IR | `INPUT` (alta impedância) | Pino liberado de volta |
+1. **Repouso e Boot (Alta Impedância sem Pull-down):** No boot e durante toda a navegação comum do sistema, o pino PB_2 permanece em `INPUT_PULLNONE` com `pinRemoveMode(IR_RX_PIN)`. 
+   > ⚠️ **Nota Crítica sobre o Core AmebaD:** A chamada `pinMode(pin, INPUT)` neste core ativa o **Pull-Down interno**. Portanto, NUNCA utilize `pinMode(INPUT)` no PB_2, pois isso puxaria a linha para LOW falsamente, interferindo no boot e no RX1. Usa-se sempre `INPUT_PULLNONE` + `pinRemoveMode()`.
+2. **Ativação Tardia Exclusiva (Late-Arm em Record):** O pino só é armado como `INPUT_PULLUP` quando o usuário entra ativamente na tela de gravação (`SCR_IR_RECORD`).
+3. **Desativação Imediata na Saída:** Qualquer transição para fora da tela de gravação (seja voltando ao menu, timeout ou comando serial) chama imediatamente `ir_stop_capture()`, restaurando PB_2 para `INPUT_PULLNONE`.
+4. **Modo Download Seguro:** Ao acionar o Download Mode (via menu About ou comando serial `flash`/`download`), o firmware desliga explicitamente o receptor, libera o pino PB_2 para o hardware de UART e programa `BIT_UARTBURN_BOOT` antes do reset.
+5. **Dica de Hardware (Isolamento Elétrico):** Se o seu módulo TSOP possuir saída push-pull ativa (e não coletor aberto), recomenda-se inserir um resistor de **1 kΩ em série** entre o OUT do TSOP e o PB_2. Assim, quando o gravador USB-UART enviar os pacotes de firmware em RX1, o sinal do programador sobrepõe o TSOP com total segurança sem disputa de corrente.
 
 O `ir_init()` (chamado no `setup()`) **não toca no pino**. O `pinMode(INPUT_PULLUP)` só é aplicado dentro de `ir_start_capture()` ao entrar na tela de gravação, e revertido para `INPUT` em `ir_stop_capture()` ao sair.
 
@@ -115,6 +122,8 @@ RTL8720dn-Deauther/
   - RSSI em dBm;
   - Tipo de encriptação (Open, WEP, WPA-PSK, WPA2-PSK, WPA3);
   - SSID (nome legível da rede, armazenado em até 32 bytes).
+- **SSIDs repetidos na lista:** a deduplicação é feita por **BSSID**, não por SSID. Duas ou três linhas com o mesmo nome em 2,4 GHz são rádios diferentes (mesh/repetidor, rede guest, WPA2/WPA3 transition etc.). A lista mostra `xN` quando o nome se repete e o cabeçalho exibe os últimos octetos do BSSID da linha selecionada. O log serial `[SCAN] Nomes repetidos` lista todos os BSSIDs de cada nome — se forem iguais, é bug; se forem diferentes, são APs distintos.
+- **Redes `*HIDDEN*`:** são SSIDs realmente ocultos (`SSID.len == 0` no beacon/probe response), não erro de parsing. A lista mostra `*H:<sufixo do BSSID>` para diferenciá-las e o log serial marca cada uma com `[HIDDEN]`. Elas reaparecem em todo scan porque continuam no ar; compare o BSSID entre scans para confirmar que é o mesmo AP.
 
 ---
 
@@ -241,31 +250,44 @@ Transmite pacotes de anúncio BLE 5.0 não conectáveis (*Non-Connectable Undire
 
 ---
 
-### 4.5 Controle Universal IR (Gravar / Emitir / Spam)
+### 4.5 Suíte de Controle Infravermelho (IR Suite & TV-B-Gone)
 
-O menu principal ganhou um quinto card, **IR Remote**, com ícone animado de televisão (14 frames 48x48). Dentro dele existem três cards: **Record**, **Emit** e **Spam**.
+O menu principal possui o card **IR Remote** posicionado estrategicamente antes de Games, com ícone animado de televisão CRT (14 frames de 48x48 pixels com efeito de desligamento em estrela/feixe de elétrons central e religamento). O menu interno em carrossel apresenta cards vetoriais com gráficos sólidos e de alto contraste:
+- **Card 0 (RECORD):** Sensor óptico TSOP sólido com íris negativa, ondas de portadora incidentes e indicador `● REC`.
+- **Card 1 (EMIT):** Controle remoto universal sólido com teclas em baixo-relevo negativo, emissor LED e ondas de portadora expansivas.
+- **Card 2 (SPAM):** Raio de alta tensão sólido com ondas de choque duplas e faíscas em diamante.
 
-#### 4.5.1 Gravação (Record)
-1. Ao entrar em **Record**, o firmware arma o pino `IR_RX` (D4/PB_2) com `INPUT_PULLUP` e passa a amostrar em laço apertado (~0,2 µs por amostra), medindo cada borda com `micros()`.
-2. Cada borda registra o intervalo em microssegundos. Intervalos maiores que **15 ms** delimitam o fim de um quadro; o buffer é publicado para a tarefa principal, que:
-   - tenta decodificar **NEC** (cabeçalho 9000/4500 µs), **Samsung** (4500/4500 µs) ou **Sony SIRC 12 bits** (2400/600 µs);
-   - guarda o endereço/comando decodificados para exibição;
-   - mantém também a sequência bruta completa, permitindo reproduzir protocolos desconhecidos.
-3. A tela mostra o protocolo, o código (`0xAAAA/0xCCCC`) e a quantidade de bordas. Os botões **SAVE**, **REPLAY** e **BACK** são navegados com LEFT/RIGHT e acionados com ENTER.
-4. **SAVE** grava o sinal na flash. A capacidade é de **8 sinais**.
+#### 4.5.1 Gravação e Escuta Contínua (Record)
+1. **Escuta Contínua e Responsiva:** Ao entrar na tela de gravação, o firmware arma `IR_RX` (PB_2 / RX1) e realiza amostragem temporal contínua. Pressionar qualquer botão do controle remoto atualiza a tela em tempo real com os novos pulsos e protocolo, sem necessidade de limpar manualmente o sinal anterior.
+2. **Visualizador de Forma de Onda (OLED Oscilloscope):** Renderiza o trem de pulsos real capturado (marcas e espaços) diretamente no display OLED monocromático de 128x64 pixels. Em repouso, exibe uma linha de centro com rastreador animado (blip) de prontidão.
+3. **Decodificação de Protocolos:**
+   - **NEC:** Preâmbulo 9000/4500 µs, 32 bits de endereço/comando.
+   - **Samsung:** Preâmbulo 4500/4500 µs, 32 bits.
+   - **Sony SIRC:** Preâmbulo 2400/600 µs, 12 bits.
+   - **RAW:** Sinais desconhecidos, ventiladores ou condicionadores de ar são preservados borda a borda para replicação exata.
+4. **Disparo Único e Sem Duplicações:** A rotina de reprodução (`REPLAY`) e o tratamento de botões contam com `flush_input()`, disparando rigorosamente 1 único frame limpo por toque (eliminando repetições acidentais em televisores).
+5. **Persistência em Flash:** Armazena até 8 slots completos no setor reservado ao usuário (`0x00100000`).
 
-#### 4.5.2 Emissão (Emit)
-- Lista os sinais salvos (até 8) com protocolo e código.
-- ENTER abre o detalhe com os botões **EMIT**, **DELETE** e **BACK**.
-- **DELETE** exige uma segunda confirmação (ENTER novamente) para evitar exclusão acidental. A remoção também é gravada imediatamente na flash.
-- **EMIT** reconstrói o quadro a partir do protocolo decodificado (NEC/Samsung/Sony) e envia 2–3 repetições; sinais **RAW** são reproduzidos borda a borda.
+#### 4.5.2 Emissão e Gerenciamento de Memória (Emit)
+- Lista os sinais salvos com protocolo e código hexadecimal.
+- Opção **EMIT** para disparo único imediato pelo pino PA_12 (38 kHz PWM).
+- Opção **DELETE** com confirmação em duas etapas para evitar exclusão acidental. A alteração é gravada imediatamente na flash.
 
-#### 4.5.3 Spam
-- Envia alternadamente **VOLUME +** e **POWER** em um ciclo contínuo, trocando de marca/modelo a cada dois disparos (intervalo de ~850 ms).
-- Tabela embutida: **Samsung**, **LG**, **Sony**, **Toshiba** e **NEC TV**.
-- ENTER (ou LEFT/DOWN) interrompe e volta ao menu IR.
+#### 4.5.3 Modos de Ataque IR e TV-B-Gone (Spam)
+O modo Spam possui seleção interativa de comportamento via botões **UP** e **DOWN** em tempo real:
+1. **TV-B-GONE:** Varredura rápida de códigos de desligamento (POWER) para desligar aparelhos em massa, acompanhada por uma barra de progresso gráfica de 0 a 100%.
+2. **ALL (PWR+VOL):** Alternância sequencial entre comandos de Power e Volume+.
+3. **MUTE SPAM:** Bombardeamento contínuo de Mute para silenciamento de televisores.
+4. **VOL+ / VOL- SPAM:** Variação contínua e rápida de volume.
 
-#### 4.5.4 Codificação e Persistência
+**Marcas compatíveis na biblioteca:** Samsung, LG TV, Sony, TCL, AOC, Philips, Toshiba/Semp, Philco, Panasonic e Multilaser.
+
+#### 4.5.4 Exportação para Flipper Zero (`.ir`)
+O firmware permite exportar a biblioteca e o último sinal capturado diretamente para o ecossistema do Flipper Zero:
+- Envie o comando `ir export` ou `ir dump` no Monitor Serial (115200 bps).
+- O console gera a saída formatada com cabeçalho oficial do Flipper Zero (`Filetype: IR signals file`, `type: parsed` ou `type: raw`), pronta para salvar em um arquivo `.ir` no cartão SD do Flipper Zero.
+
+#### 4.5.5 Codificação e Persistência
 | Protocolo | Cabeçalho | Bit 0 | Bit 1 | Bits | Ordem |
 |:---|:---:|:---:|:---:|:---:|:---|
 | NEC | 9000 / 4500 µs | 560 / 560 µs | 560 / 1690 µs | 32 | LSB primeiro |

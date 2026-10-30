@@ -21,19 +21,32 @@
 #define OLED_SDA   8  // D8 -> PA_26
 
 // =========================================================
-// IR Remote Pins
+// IR Remote Pins (PB_2 / RX1 Multiplexing)
 // =========================================================
-// PB_2 (D4) is also the boot/download strap, BUT we never configure it as
-// GPIO outside the IR menu. At boot/RESET the pin is in high-Z so the BURN
-// button can pull it LOW without fighting the MCU. pinMode(INPUT_PULLUP) is
-// called only inside ir_start_capture() (on entering the IR menu) and
-// released back to INPUT (tristate) in ir_stop_capture() when leaving.
+// O pino PB_2 (AMB_D5 / PB2 / RX1 / Burn Strap) é compartilhado entre:
+//   1. OUT do receptor infravermelho (TSOP1838 / VS1838B demodulado)
+//   2. RX1 / Boot strap para UART Download Mode (Gravação de firmware)
 //
-// Pins that CANNOT be used as IR_RX on this board:
-//   D5  / PB_2  -- original strap number in some core variants (same physical pin)
-//   D9  / PA_15 -- UART0-RX of Serial: UART peripheral holds it LOW after Serial.begin()
-//   D4  / PA_29 -- UART-bridge RX: conflicts with USB firmware upload in some core variants
-#define IR_RX_PIN  4   // D4  -> PB_2 (TSOP / VS1838 demodulated output, late-armed)
+// GERENCIAMENTO METICULOSO DE CONFLITOS (PB_2):
+// - Em repouso (boot e fora da tela de Record), o pino PB_2 é mantido em
+//   INPUT_PULLNONE (alta impedância / tristate sem pull-down interno).
+//   NOTA CRÍTICA: No core AmebaD, pinMode(pin, INPUT) ativa PULL-DOWN interno!
+//   Portanto, NUNCA usar pinMode(INPUT) em PB_2, pois puxaria o pino para LOW
+//   e causaria falso disparo do modo de download / conflitaria com o RX1.
+// - Ao entrar na tela de gravação (SCR_IR_RECORD), o pino é armado com INPUT_PULLUP.
+// - Ao sair da gravação, trocar de tela ou entrar em Download Mode,
+//   ir_stop_capture() é chamado imediatamente, liberando o pino com
+//   INPUT_PULLNONE e pinRemoveMode() para que o RX1 fique 100% livre
+//   para o gravador/bootloader sem qualquer interferência do firmware.
+#ifndef IR_RX_PIN
+  #if defined(PB2)
+    #define IR_RX_PIN  PB2   // D5 / PB_2 (LP_UART_RX / RX1 / Burn Strap)
+  #elif defined(AMB_D5)
+    #define IR_RX_PIN  AMB_D5
+  #else
+    #define IR_RX_PIN  5
+  #endif
+#endif
 #define IR_TX_PIN 12   // D12 -> PA_12 (IR LED via transistor, 38 kHz PWM)
 
 // =========================================================

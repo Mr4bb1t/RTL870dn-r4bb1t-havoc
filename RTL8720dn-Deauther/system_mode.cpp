@@ -1,6 +1,8 @@
 #include "system_mode.h"
 #include "ui_display.h"
 #include "debug.h"
+#include "config.h"
+#include "ir_remote.h"
 
 extern "C" {
   void BKUP_Set(uint32_t DwordIdx, uint32_t BitMask);
@@ -10,16 +12,25 @@ extern "C" {
 void enterDownloadMode() {
   DEBUG_SER_PRINT("\n=========================================\n");
   DEBUG_SER_PRINT("[SYSTEM] Entrando em UART Download Mode...\n");
-  DEBUG_SER_PRINT("[SYSTEM] Aguardando gravacao via UART (LOG_TX)...\n");
+  DEBUG_SER_PRINT("[SYSTEM] Liberando pino PB_2 (RX1) do receptor IR...\n");
+  DEBUG_SER_PRINT("[SYSTEM] Aguardando gravacao via UART (PA7 TX / PB2 RX1)...\n");
   DEBUG_SER_PRINT("=========================================\n");
+
+  // CRÍTICO: Desliga qualquer captura ativa e libera PB_2 de volta para
+  // INPUT_PULLNONE + pinRemoveMode() para que o bootloader do RTL8720DN
+  // utilize o pino PB_2 como RX1 sem qualquer conflito de GPIO ou pull-down!
+  ir_stop_capture();
+  pinMode(IR_RX_PIN, INPUT_PULLNONE);
+  pinRemoveMode(IR_RX_PIN);
 
   display.clearBuffer();
   display.setFont(u8g2_font_7x14B_tf);
-  draw_str_centered(20, "DOWNLOAD MODE", 1);
+  draw_str_centered(18, "DOWNLOAD MODE", 1);
   display.setFont(u8g2_font_5x7_tf);
-  draw_str_centered(34, "Waiting for UART...", 1);
-  draw_str_centered(44, "PA7 (LOG_TX) Active", 1);
-  draw_str_centered(56, "Ready to Flash", 1);
+  draw_str_centered(32, "Waiting for UART...", 1);
+  draw_str_centered(42, "PA7 (TX) / PB2 (RX1)", 1);
+  draw_str_centered(52, "Do NOT send IR signals", 1);
+  draw_str_centered(62, "Ready to Flash", 1);
   display.sendBuffer();
 
   delay(300);
@@ -55,8 +66,11 @@ void check_serial_commands() {
           DEBUG_SER_PRINT("[CMD] Reiniciando...\n");
           delay(100);
           sys_reset();
+        } else if (serial_cmd_buf == "ir export" || serial_cmd_buf == "ir dump" || 
+                   serial_cmd_buf == "ir flipper" || serial_cmd_buf == "export") {
+          ir_export_flipper();
         } else if (serial_cmd_buf == "help") {
-          Serial.println("[CMD] Comandos: 'flash' / 'download' (Download Mode), 'reboot' (Reiniciar)");
+          Serial.println("[CMD] Comandos: 'flash'/'download', 'reboot', 'ir export' (Formato Flipper .ir)");
         }
         serial_cmd_buf = "";
       }

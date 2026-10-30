@@ -312,9 +312,9 @@ void render_main_menu() {
     display.drawXBMP(40, 0, 48, 48,
                      anim_bluetooth_48x48[center_anim_frame % 14]);
   } else if (menu_sel == 2) {
-    display.drawXBMP(40, 0, 48, 48, icon_games_48x48);
-  } else if (menu_sel == 3) {
     display.drawXBMP(40, 0, 48, 48, anim_tv_48x48[center_anim_frame % 14]);
+  } else if (menu_sel == 3) {
+    display.drawXBMP(40, 0, 48, 48, anim_games_48x48[center_anim_frame % 14]);
   } else {
     display.drawXBMP(40, 0, 48, 48, icon_about_48x48);
   }
@@ -496,9 +496,19 @@ void render_net_list() {
     if (net_marked[i]) markedCount++;
   }
 
-  char m_buf[16];
-  snprintf(m_buf, sizeof(m_buf), "%d/%d Sel:%d", net_sel + 1,
-           (int)scan_results.size(), markedCount);
+  // Cabeçalho: contador + sufixo do BSSID da rede selecionada. Duas linhas com
+  // o mesmo nome só são duplicatas reais se tiverem o mesmo BSSID; o sufixo
+  // (últimos 2 octetos) permite conferir isso sem sair da tela.
+  char m_buf[24];
+  if (net_sel >= 0 && net_sel < (int)scan_results.size() &&
+      scan_results[net_sel].bssid_str.length() >= 17) {
+    snprintf(m_buf, sizeof(m_buf), "%d/%d %s", net_sel + 1,
+             (int)scan_results.size(),
+             scan_results[net_sel].bssid_str.c_str() + 12); // "EE:FF"
+  } else {
+    snprintf(m_buf, sizeof(m_buf), "%d/%d Sel:%d", net_sel + 1,
+             (int)scan_results.size(), markedCount);
+  }
   draw_header("NETWORKS", m_buf);
 
   if (scan_results.empty()) {
@@ -529,11 +539,21 @@ void render_net_list() {
       display.drawBox(4, y_top + 4, 3, 3);
     }
 
-    // SSID: up to 11 chars. Smooth pause & scroll if selected and > 11 chars
-    String s = (r.ssid.length() > 0) ? r.ssid : String("*HIDDEN*");
+    // SSID: até 10 chars (o badge 2G/5G começa em X=72). Redes ocultas usam o
+    // sufixo do BSSID para ficarem distinguíveis; SSIDs repetidos mostram a
+    // contagem "xN" — são BSSIDs diferentes, não duplicatas do mesmo rádio.
+    bool hidden = (r.ssid.length() == 0 || r.ssid == "*HIDDEN*");
+    int dup = countSameSSID(r.ssid);
+    String s = hidden ? ("*H:" + r.bssid_str.substring(12)) : r.ssid;
     char ssid_buf[16];
-    if (isSel && s.length() > 11) {
-      int maxOffset = s.length() - 11;
+    const int maxChars = 10;
+    if (!hidden && dup > 1) {
+      // "Nome xN" em no máximo 10 caracteres
+      int baseLen = (dup >= 10) ? 5 : 6;
+      String base = s.substring(0, baseLen);
+      snprintf(ssid_buf, sizeof(ssid_buf), "%s x%d", base.c_str(), dup);
+    } else if (isSel && s.length() > maxChars) {
+      int maxOffset = s.length() - maxChars;
       int period = maxOffset + 6;
       int step = (millis() / 450) % period;
       int offset = 0;
@@ -544,9 +564,9 @@ void render_net_list() {
       } else {
         offset = maxOffset;
       }
-      s.substring(offset, offset + 11).toCharArray(ssid_buf, sizeof(ssid_buf));
+      s.substring(offset, offset + maxChars).toCharArray(ssid_buf, sizeof(ssid_buf));
     } else {
-      s.substring(0, 11).toCharArray(ssid_buf, sizeof(ssid_buf));
+      s.substring(0, maxChars).toCharArray(ssid_buf, sizeof(ssid_buf));
     }
     display.drawStr(12, y_txt, ssid_buf);
 

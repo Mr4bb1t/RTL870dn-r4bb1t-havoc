@@ -123,30 +123,29 @@ static void ir_pin_selftest();
 int ir_pin_level() { return digitalRead(IR_RX_PIN) ? 1 : 0; }
 
 static bool capture_once() {
-  const uint32_t WAIT_US = 40000;   // keep the UI alive between attempts
-  const uint32_t HARD_US = 400000;  // absolute cap for one frame
+  const uint32_t WAIT_US = 40000;   // Janela de escuta contínua e rápida mantendo UI fluida
+  const uint32_t HARD_US = 400000;  // Teto máximo para 1 frame completo
 
-  int last = ir_pin_level();
+  // Garante linha em idle (HIGH). Se estiver presa em LOW, aguarda liberar
   uint32_t t_wait = micros();
+  while (capture_on && ir_pin_level() == 0) {
+    if ((uint32_t)(micros() - t_wait) > WAIT_US) return false;
+  }
 
-  // Phase 1: wait for the line to change at all.
+  // Fase 1: detecta a borda de descida (HIGH -> LOW) que inicia a portadora (mark)
+  uint32_t t_start = 0;
   while (capture_on) {
-    int v = ir_pin_level();
-    if (v != last) {
-      last = v;
+    if (ir_pin_level() == 0) {
+      t_start = micros(); // Medição imediata no instante exato da borda!
       break;
     }
     if ((uint32_t)(micros() - t_wait) > WAIT_US) return false;
   }
-  if (!capture_on) return false;
+  if (!capture_on || t_start == 0) return false;
 
-  DEBUG_SER_PRINT("[IR] first edge, line now ");
-  DEBUG_SER_PRINT(last ? "HIGH" : "LOW");
-  DEBUG_SER_PRINT("\n");
-
-  // Phase 2: record the interval between every edge.
+  // Fase 2: laço fechado medindo cada transição (SEM prints seriais no caminho crítico!)
   int n = 0;
-  uint32_t t_start = micros();
+  int last = 0; // A linha acabou de cair para LOW (mark do preâmbulo)
   uint32_t last_edge = t_start;
   uint32_t spin = 0;
 
@@ -171,36 +170,39 @@ static bool capture_once() {
     }
   }
 
-  if (n < 6) {
-    DEBUG_SER_PRINT("[IR] discarded, only ");
-    DEBUG_SER_PRINT(n);
-    DEBUG_SER_PRINT(" edges\n");
+  // Filtro de ruído: frames de controle remoto válidos têm pelo menos 20 bordas
+  if (n < 20) {
     return false;
   }
+
+  DEBUG_SER_PRINT("[IR] Quadro capturado: bordas=");
+  DEBUG_SER_PRINT(n);
+  DEBUG_SER_PRINT(" header_mark=");
+  DEBUG_SER_PRINT((unsigned)raw_scratch[0]);
+  DEBUG_SER_PRINT(" us, header_space=");
+  DEBUG_SER_PRINT((unsigned)raw_scratch[1]);
+  DEBUG_SER_PRINT(" us\n");
 
   memcpy(cur_sig.raw, raw_scratch, n * sizeof(uint16_t));
   for (int i = n; i < IR_MAX_RAW; i++) cur_sig.raw[i] = 0;
   cur_sig.count = (uint8_t)n;
   decode_current();
   have_sig = true;
+  ir_toast[0] = '\0'; // Limpa toast anterior para exibir o novo sinal capturado
   ir_debug_dump();
   return true;
 }
 
 void ir_start_capture() {
-  // Arm the pin only NOW (entering the IR menu). This keeps PB_2 in
-  // high-Z (INPUT, no pull) during normal operation so the BURN button
-  // can pull it LOW for UART download mode without fighting the MCU.
+  // Arma o pino PB_2 (RX1) exclusivamente durante a gravacao.
   pinMode(IR_RX_PIN, INPUT_PULLUP);
   capture_on = true;
   cap_edges = 0;
   ir_last_status_ms = millis();
 
   delay(2);
-  ir_pin_selftest();   // diagnose wiring now that the pin is armed
-  DEBUG_SER_PRINT("[IR] capture armed: pin D");
-  DEBUG_SER_PRINT(IR_RX_PIN);
-  DEBUG_SER_PRINT(", idle level=");
+  ir_pin_selftest();   // diagnostica ligacao com o pino armado
+  DEBUG_SER_PRINT("[IR] capture armed: pino PB_2 (RX1/D5), nivel idle=");
   DEBUG_SER_PRINT(ir_pin_level() ? "HIGH" : "LOW");
   DEBUG_SER_PRINT("\n");
 }
@@ -208,10 +210,12 @@ void ir_start_capture() {
 void ir_stop_capture() {
   if (capture_on) {
     capture_on = false;
-    // Release PB_2 back to tristate (INPUT, no pull) so the BURN button
-    // can pull it LOW for UART download mode at the next RESET.
-    pinMode(IR_RX_PIN, INPUT);
-    DEBUG_SER_PRINT("[IR] capture stopped. edges=");
+    // Libera PB_2 de volta para alta impedancia (INPUT_PULLNONE) e remove
+    // o modo GPIO para que o pino fique 100% livre para o bootloader/RX1
+    // e botao BURN sem conflito com o MCU:
+    pinMode(IR_RX_PIN, INPUT_PULLNONE);
+    pinRemoveMode(IR_RX_PIN);
+    DEBUG_SER_PRINT("[IR] capture stopped, PB_2 liberado (high-Z/RX1 livre). edges=");
     DEBUG_SER_PRINT((unsigned)cap_edges);
     DEBUG_SER_PRINT("\n");
   }
@@ -238,8 +242,8 @@ static bool decode_nec(const uint16_t *r, int n, uint16_t &addr,
                        uint16_t &cmd, bool &samsung) {
   if (n < 66) return false;
 
-  bool nec_hdr = close_to(r[0], 9000, 2200) && close_to(r[1], 4500, 1300);
-  bool sam_hdr = close_to(r[0], 4500, 1300) && close_to(r[1], 4500, 1300);
+  bool nec_hdr = close_to(r[0], 9000, 2500) && close_to(r[1], 4500, 1800);
+  bool sam_hdr = close_to(r[0], 4500, 1800) && close_to(r[1], 4500, 1800);
   if (!nec_hdr && !sam_hdr) return false;
 
   uint32_t data = 0;
@@ -248,10 +252,12 @@ static bool decode_nec(const uint16_t *r, int n, uint16_t &addr,
     if (i + 1 >= n) return false;
     uint16_t mark  = r[i++];
     uint16_t space = r[i++];
-    if (!close_to(mark, 560, 280)) return false;
-    if (space > 1000) {
+    if (!close_to(mark, 560, 350)) return false;
+    if (space >= 950 && space <= 2600) {
       data |= (1UL << b);
-    } else if (space < 300) {
+    } else if (space >= 200 && space < 950) {
+      // Bit 0: espaço curto (560 us nominal)
+    } else {
       return false;
     }
   }
@@ -319,18 +325,17 @@ static void ir_space(uint32_t us) {
 }
 
 static void send_nec_word(uint32_t data, bool samsung) {
-  for (int rep = 0; rep < 5; rep++) {
-    ir_mark(samsung ? 4500 : 9000);
-    ir_space(4500);
+  // Transmite exatamente 1 quadro do protocolo (comando único, sem duplicar)
+  ir_mark(samsung ? 4500 : 9000);
+  ir_space(4500);
 
-    for (int b = 0; b < 32; b++) {
-      ir_mark(560);
-      ir_space((data & (1UL << b)) ? 1690 : 560);
-    }
-
+  for (int b = 0; b < 32; b++) {
     ir_mark(560);
-    ir_space(samsung ? 45000 : 40000);
+    ir_space((data & (1UL << b)) ? 1690 : 560);
   }
+
+  ir_mark(560);
+  ir_space(samsung ? 45000 : 40000);
 }
 
 static void send_sony_word(uint16_t word) {
@@ -348,11 +353,11 @@ static void send_sony_word(uint16_t word) {
 }
 
 static void send_raw_signal(const IRSavedSignal &s) {
+  // Reproduz exatamente 1 vez o sinal RAW capturado
   for (int i = 0; i < s.count; i++) {
     if (i & 1) ir_space(s.raw[i]);
     else       ir_mark(s.raw[i]);
   }
-  ir_space(40000);
 }
 
 static void ir_send_signal(const IRSavedSignal &s) {
@@ -467,7 +472,11 @@ void ir_emit_saved(int idx) {
 void ir_replay_current() {
   if (have_sig) {
     DEBUG_SER_PRINT("[IR] replay captured frame\n");
+    bool was_cap = capture_on;
+    capture_on = false; // Pausa escuta durante emissão própria
     ir_send_signal(cur_sig);
+    delay(40);
+    capture_on = was_cap;
   } else {
     DEBUG_SER_PRINT("[IR] replay: no signal\n");
   }
@@ -481,17 +490,45 @@ struct IRSpamEntry {
   uint8_t     protocol;
   uint16_t    address;
   uint16_t    power;
+  uint16_t    mute;
   uint16_t    volup;
+  uint16_t    voldn;
 };
 
 static const IRSpamEntry IR_SPAM[] = {
-  {"Samsung",   IR_PROTO_SAMSUNG, 0xE0E0, 0x40BF, 0xE01F},
-  {"LG",        IR_PROTO_NEC,     0x20DF, 0x10EF, 0x40BF},
-  {"Sony",      IR_PROTO_SONY,    0x0000, 0x0A90, 0x0490},
-  {"Toshiba",   IR_PROTO_NEC,     0x02FD, 0x48B7, 0x40BF},
-  {"NEC TV",    IR_PROTO_NEC,     0x00FF, 0x40BF, 0xE01F},
+  {"Samsung",    IR_PROTO_SAMSUNG, 0xE0E0, 0x40BF, 0xF00F, 0xE01F, 0xD02F},
+  {"LG TV",      IR_PROTO_NEC,     0x20DF, 0x10EF, 0x906F, 0x40BF, 0xC03F},
+  {"Sony",       IR_PROTO_SONY,    0x0000, 0x0A90, 0x0290, 0x0490, 0x0C90},
+  {"TCL",        IR_PROTO_NEC,     0x00BF, 0x48B7, 0xE21D, 0xD22D, 0x52AD},
+  {"AOC",        IR_PROTO_NEC,     0x01FE, 0x48B7, 0xB847, 0x58A7, 0x7887},
+  {"Philips",    IR_PROTO_NEC,     0x01FE, 0x48B7, 0x906F, 0x58A7, 0x7887},
+  {"Toshiba",    IR_PROTO_NEC,     0x02FD, 0x48B7, 0xB847, 0x58A7, 0x7887},
+  {"Philco",     IR_PROTO_NEC,     0x00FF, 0x02FD, 0x08F7, 0x40BF, 0xC03F},
+  {"Panasonic",  IR_PROTO_NEC,     0x02FD, 0x48B7, 0x28D7, 0x58A7, 0x7887},
+  {"Multilaser", IR_PROTO_NEC,     0x00FF, 0x02FD, 0x08F7, 0x58A7, 0x7887},
 };
 #define IR_SPAM_COUNT ((int)(sizeof(IR_SPAM) / sizeof(IR_SPAM[0])))
+
+static uint8_t  ir_spam_mode = SPAM_MODE_TV_B_GONE;
+
+void ir_set_spam_mode(uint8_t m) {
+  ir_spam_mode = (m < SPAM_MODE_COUNT) ? m : 0;
+}
+
+uint8_t ir_get_spam_mode() {
+  return ir_spam_mode;
+}
+
+const char *ir_get_spam_mode_name(uint8_t m) {
+  switch (m) {
+    case SPAM_MODE_TV_B_GONE: return "TV-B-GONE";
+    case SPAM_MODE_ALL_P_V:   return "ALL (PWR+VOL)";
+    case SPAM_MODE_MUTE:      return "MUTE SPAM";
+    case SPAM_MODE_VOL_UP:    return "VOL+ SPAM";
+    case SPAM_MODE_VOL_DOWN:  return "VOL- SPAM";
+    default:                  return "SPAM";
+  }
+}
 
 void ir_start_spam() {
   spam_running = true;
@@ -526,16 +563,33 @@ static void ir_debug_dump() {
 #endif
 }
 
+static uint8_t rev8(uint8_t b) {
+  b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+  b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+  b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+  return b;
+}
+
+// inverte os bits de cada byte, mantendo a ordem dos bytes no transmitido
+static uint16_t rev_bytes16(uint16_t v) {
+  return (uint16_t)(rev8(v >> 8) | ((uint16_t)rev8(v & 0xFF) << 8));
+}
+
 void ir_tick() {
-  // Capture runs synchronously here: waits up to 40 ms for the first edge and
-  // then collects the whole frame (max ~400 ms).
-  if (capture_on && !have_sig) {
+  // Se saiu da tela de gravacao, encerra imediatamente e libera o PB_2
+  if (capture_on && current_screen != SCR_IR_RECORD) {
+    ir_stop_capture();
+  }
+
+  // Captura contínua e em tempo real: qualquer novo clique em botão do controle
+  // atualiza imediatamente a tela e as ondas, sem travar nem exigir limpeza manual.
+  if (capture_on) {
     capture_once();
   }
 
-  // Heartbeat so the serial log shows whether the receiver is alive.
-  if (capture_on && !have_sig &&
-      (uint32_t)(millis() - ir_last_status_ms) > 1000) {
+  // Heartbeat serial periódico
+  if (capture_on &&
+      (uint32_t)(millis() - ir_last_status_ms) > 1500) {
     ir_last_status_ms = millis();
     DEBUG_SER_PRINT("[IR] waiting... edges=");
     DEBUG_SER_PRINT((unsigned)cap_edges);
@@ -544,32 +598,72 @@ void ir_tick() {
     DEBUG_SER_PRINT("\n");
   }
 
-  // Spam scheduler
-  if (spam_running && (millis() - spam_last_ms > 850)) {
+  // Spam scheduler dinâmico (com TV-B-Gone e modos de ação)
+  uint32_t spam_gap = (ir_spam_mode == SPAM_MODE_TV_B_GONE) ? 420 : 550;
+  if (spam_running && (millis() - spam_last_ms > spam_gap)) {
     spam_last_ms = millis();
 
     const IRSpamEntry &e = IR_SPAM[spam_idx];
     IRSavedSignal tmp;
     memset(&tmp, 0, sizeof(tmp));
     tmp.protocol = e.protocol;
-    tmp.address  = e.address;
-    tmp.command  = spam_vol ? e.volup : e.power;
+
+    uint16_t cmd = e.power;
+    const char *action_label = "POWER";
+
+    switch (ir_spam_mode) {
+      case SPAM_MODE_TV_B_GONE:
+        cmd = e.power;
+        action_label = "POWER";
+        break;
+      case SPAM_MODE_MUTE:
+        cmd = e.mute;
+        action_label = "MUTE";
+        break;
+      case SPAM_MODE_VOL_UP:
+        cmd = e.volup;
+        action_label = "VOL+";
+        break;
+      case SPAM_MODE_VOL_DOWN:
+        cmd = e.voldn;
+        action_label = "VOL-";
+        break;
+      case SPAM_MODE_ALL_P_V:
+      default:
+        cmd = spam_vol ? e.volup : e.power;
+        action_label = spam_vol ? "VOL+" : "POWER";
+        break;
+    }
+
+    if (e.protocol == IR_PROTO_SONY) {
+      tmp.address = 0;
+      tmp.command = cmd;
+    } else {
+      tmp.address = rev_bytes16(e.address);
+      tmp.command = rev_bytes16(cmd);
+    }
 
     ir_send_signal(tmp);
     spam_sent++;
 
-    DEBUG_SER_PRINT("[IR] spam #");
-    DEBUG_SER_PRINT((unsigned long)spam_sent);
-    DEBUG_SER_PRINT(" ");
+    DEBUG_SER_PRINT("[IR SPAM] [");
+    DEBUG_SER_PRINT(ir_get_spam_mode_name(ir_spam_mode));
+    DEBUG_SER_PRINT("] ");
     DEBUG_SER_PRINT(e.brand);
-    DEBUG_SER_PRINT(" ");
-    DEBUG_SER_PRINT(spam_vol ? "VOL+" : "POWER");
-    DEBUG_SER_PRINT("\n");
+    DEBUG_SER_PRINT(" -> ");
+    DEBUG_SER_PRINT(action_label);
+    DEBUG_SER_PRINT(" (cmd 0x");
+    DEBUG_SER_PRINT((unsigned)cmd);
+    DEBUG_SER_PRINT(")\n");
 
-    if (spam_vol) {
-      spam_vol = false;
+    if (ir_spam_mode == SPAM_MODE_ALL_P_V) {
+      if (spam_vol) {
+        spam_vol = false;
+      } else {
+        spam_vol = true;
+        spam_idx = (spam_idx + 1) % IR_SPAM_COUNT;
+      }
     } else {
-      spam_vol = true;
       spam_idx = (spam_idx + 1) % IR_SPAM_COUNT;
     }
   }
@@ -590,32 +684,29 @@ static void ir_pin_selftest() {
   delay(5);
   int up = digitalRead(IR_RX_PIN) ? 1 : 0;
 
-  pinMode(IR_RX_PIN, INPUT);   // this core maps INPUT to a pull-down
+  pinMode(IR_RX_PIN, INPUT_PULLNONE); // Usa INPUT_PULLNONE para nao forcar pull-down no PB_2
   delay(5);
   int dn = digitalRead(IR_RX_PIN) ? 1 : 0;
 
   pinMode(IR_RX_PIN, INPUT_PULLUP);
   delay(5);
 
-  DEBUG_SER_PRINT("[IR] pin test: pullup=");
+  DEBUG_SER_PRINT("[IR] pin test PB_2: pullup=");
   DEBUG_SER_PRINT(up);
-  DEBUG_SER_PRINT(" pulldown=");
+  DEBUG_SER_PRINT(" floating=");
   DEBUG_SER_PRINT(dn);
   DEBUG_SER_PRINT(" -> ");
 
   if (!up && !dn) {
     DEBUG_SER_PRINT("LINE HELD LOW: pino em curto com GND ou OUT na perna GND\n");
   } else if (up && dn) {
-    DEBUG_SER_PRINT("LINE HELD HIGH: OUT na perna VCC\n");
+    DEBUG_SER_PRINT("LINE HELD HIGH: TSOP OUT em repouso (HIGH) ou ligado a VCC\n");
   } else if (up && !dn) {
-    DEBUG_SER_PRINT("high-Z normal (OUT em repouso = HIGH)\n");
+    DEBUG_SER_PRINT("Linha em alta impedancia / repouso normal\n");
   } else {
-    DEBUG_SER_PRINT("estado estranho, confira a fiacao\n");
+    DEBUG_SER_PRINT("estado indeterminado, confira a fiacao\n");
   }
 
-  // NOTE: D5 (PB_2) is the boot/download strap on this board. Never configure
-  // or probe it here: a wire on that pad keeps the ROM from entering UART
-  // download mode. Only the configured RX pin is touched.
   pinMode(IR_RX_PIN, INPUT_PULLUP);
 }
 
@@ -625,17 +716,15 @@ void ir_init() {
   analogWritePeriod(26);          // ~38.4 kHz
   analogWrite(IR_TX_PIN, 0);
 
-  // IR_RX_PIN (PB_2 / D4) is intentionally left unconfigured here.
-  // It stays in high-Z (INPUT, no pull) so the BURN button can pull it
-  // LOW at RESET for UART download mode. pinMode(INPUT_PULLUP) is applied
-  // lazily inside ir_start_capture() when the user enters the IR menu.
+  // IR_RX_PIN (PB_2 / RX1 / D5) fica totalmente livre em alta impedancia (INPUT_PULLNONE).
+  // NUNCA usar pinMode(INPUT) aqui porque ativaria pull-down interno no AmebaD.
+  pinMode(IR_RX_PIN, INPUT_PULLNONE);
+  pinRemoveMode(IR_RX_PIN);
 
   ir_store_load();
   DEBUG_SER_PRINT("[IR] TX pin D");
   DEBUG_SER_PRINT(IR_TX_PIN);
-  DEBUG_SER_PRINT(" (PA_12) 38kHz carrier ready, RX pin D");
-  DEBUG_SER_PRINT(IR_RX_PIN);
-  DEBUG_SER_PRINT(" (PB_2) late-armed on IR menu entry\n");
+  DEBUG_SER_PRINT(" (PA_12) 38kHz pronto, RX pin PB_2 (RX1/D5) late-armed em Record\n");
   DEBUG_SER_PRINT("[IR] Ready. Saved signals: ");
   DEBUG_SER_PRINT((int)saved_n);
   DEBUG_SER_PRINT("\n");
@@ -712,27 +801,64 @@ void render_ir_menu() {
       display.drawStr(cx + 14, 46, "< Back to Menu");
     }
 
-    // Right side icons
+    // Right side vector graphics for each card (Solid, bold & high-contrast)
     if (i == 0) {
-      // Record: IR LED + waves
-      display.drawDisc(cx + 91, 32, 3);
-      display.drawCircle(cx + 91, 32, 7);
-      display.drawCircle(cx + 99, 32, 4);
-      display.drawCircle(cx + 99, 32, 8);
+      // RECORD: Solid Sensor Eye + Inverted Iris + Incoming Carrier Waves + REC Badge
+      int rx = cx + 101, ry = 33;
+      // Solid Sensor Body
+      display.drawRBox(rx - 5, ry - 4, 12, 15, 2);
+      // Optical Top Dome
+      display.drawDisc(rx + 1, ry - 5, 4);
+      // Inverted sensor iris aperture (high contrast negative space)
+      display.setColorIndex(0);
+      display.drawDisc(rx + 1, ry + 2, 3);
+      display.setColorIndex(1);
+      display.drawDisc(rx + 1, ry + 2, 1);
+      // Dual thick (2px) incoming carrier wave arcs on the left
+      display.drawCircle(rx + 1, ry - 3, 7, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT);
+      display.drawCircle(rx + 1, ry - 3, 8, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT);
+      display.drawCircle(rx + 1, ry - 3, 11, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT);
+      display.drawCircle(rx + 1, ry - 3, 12, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT);
+      // Solid REC dot indicator
+      display.drawDisc(rx - 10, ry - 8, 3);
     } else if (i == 1) {
-      // Emit: remote with signal waves
-      display.drawRFrame(cx + 88, 24, 10, 18, 2);
-      display.drawBox(cx + 91, 27, 4, 2);
-      display.drawBox(cx + 91, 31, 4, 2);
-      display.drawBox(cx + 91, 35, 4, 2);
-      display.drawCircle(cx + 104, 32, 3);
-      display.drawCircle(cx + 104, 32, 7);
-      display.drawCircle(cx + 104, 32, 11);
+      // EMIT: Solid Universal Remote Control + Inverted Keypad + Radiant Carrier Waves
+      int mx = cx + 96, my = 35;
+      // Solid Remote Body & Emitter LED Tip
+      display.drawRBox(mx - 6, my - 11, 13, 23, 2);
+      display.drawRBox(mx - 2, my - 14, 5, 4, 1);
+      // Inverted negative space buttons (Power, D-Pad, Keypad)
+      display.setColorIndex(0);
+      display.drawDisc(mx, my - 6, 2);         // Power button
+      display.drawBox(mx - 3, my, 7, 2);         // Horizontal D-Pad
+      display.drawBox(mx - 1, my - 2, 3, 6);     // Vertical D-Pad
+      display.drawBox(mx - 3, my + 6, 2, 2);     // Key 1
+      display.drawBox(mx + 2, my + 6, 2, 2);     // Key 2
+      display.setColorIndex(1);
+      // Triple thick (2px) radiant outgoing carrier waves
+      display.drawCircle(mx + 3, my - 8, 6, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      display.drawCircle(mx + 3, my - 8, 7, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      display.drawCircle(mx + 3, my - 8, 11, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      display.drawCircle(mx + 3, my - 8, 12, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      display.drawCircle(mx + 3, my - 8, 16, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      display.drawCircle(mx + 3, my - 8, 17, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
     } else if (i == 2) {
-      // Spam: lightning bolt
-      display.drawTriangle(cx + 98, 22, cx + 88, 35, cx + 96, 35);
-      display.drawTriangle(cx + 96, 35, cx + 106, 29, cx + 96, 43);
-      display.drawBox(cx + 90, 42, 14, 2);
+      // SPAM: Solid High-Voltage Lightning Bolt + Dual Thick Shockwaves + Diamond Sparks
+      int sx = cx + 101, sy = 33;
+      // Solid High-Voltage Lightning Bolt
+      display.drawTriangle(sx + 3, sy - 14, sx - 6, sy + 1, sx + 2, sy + 1);
+      display.drawTriangle(sx - 2, sy - 1, sx + 5, sy - 1, sx - 4, sy + 14);
+      display.drawBox(sx - 3, sy - 1, 6, 3);
+      // Dual thick (2px) shockwave arcs
+      display.drawCircle(sx - 2, sy, 7, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT);
+      display.drawCircle(sx - 2, sy, 8, U8G2_DRAW_UPPER_LEFT | U8G2_DRAW_LOWER_LEFT);
+      display.drawCircle(sx + 2, sy, 7, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      display.drawCircle(sx + 2, sy, 8, U8G2_DRAW_UPPER_RIGHT | U8G2_DRAW_LOWER_RIGHT);
+      // Solid energy sparks (diamonds)
+      display.drawTriangle(sx - 10, sy - 8, sx - 8, sy - 11, sx - 6, sy - 8);
+      display.drawTriangle(sx - 10, sy - 8, sx - 8, sy - 5, sx - 6, sy - 8);
+      display.drawTriangle(sx + 6, sy + 8, sx + 8, sy + 5, sx + 10, sy + 8);
+      display.drawTriangle(sx + 6, sy + 8, sx + 8, sy + 11, sx + 10, sy + 8);
     } else {
       display.drawTriangle(cx + 89, 32, cx + 97, 25, cx + 97, 39);
       display.drawBox(cx + 97, 30, 12, 5);
@@ -755,60 +881,74 @@ void render_ir_menu() {
 }
 
 // =============================================================================
-// RENDER: RECORD
+// WAVEFORM DISPLAY (Visualizador Osciloscópio no OLED)
 // =============================================================================
-static void render_wait_icon(int x, int y) {
-  // Small TV with IR waves
-  display.drawRFrame(x, y, 24, 16, 2);
-  display.drawFrame(x + 4, y + 4, 10, 7);
-  display.drawLine(x + 8, y, x + 5, y - 4);
-  display.drawLine(x + 16, y, x + 19, y - 4);
-  display.drawCircle(x + 28, y + 8, 3);
-  display.drawCircle(x + 28, y + 8, 7);
-  display.drawCircle(x + 28, y + 8, 11);
+void draw_ir_waveform(int x, int y, int w, int h, const uint16_t *raw, int count) {
+  display.drawFrame(x, y, w, h);
+  if (count <= 2 || raw == nullptr) {
+    // Linha de centro do osciloscópio (idle / escuta)
+    int mid_y = y + h / 2;
+    display.drawHLine(x + 2, mid_y, w - 4);
+    // Blip de varredura ativo animado
+    int blip_x = x + 3 + (int)((millis() / 8) % (w - 8));
+    display.drawVLine(blip_x, mid_y - 2, 5);
+    display.drawVLine(blip_x + 1, mid_y - 1, 3);
+    return;
+  }
+
+  int max_edges = count > 36 ? 36 : count;
+  uint32_t total_us = 0;
+  for (int i = 0; i < max_edges; i++) {
+    total_us += raw[i];
+  }
+  if (total_us == 0) total_us = 1;
+
+  int y_high = y + 2;
+  int y_low  = y + h - 3;
+  int cur_x  = x + 2;
+  int max_x  = x + w - 2;
+
+  bool level_high = true;
+  for (int i = 0; i < max_edges && cur_x < max_x; i++) {
+    int pulse_w = ((uint32_t)raw[i] * (w - 4)) / total_us;
+    if (pulse_w < 1) pulse_w = 1;
+    if (cur_x + pulse_w > max_x) pulse_w = max_x - cur_x;
+
+    int cur_y = level_high ? y_high : y_low;
+    display.drawHLine(cur_x, cur_y, pulse_w);
+
+    int next_x = cur_x + pulse_w;
+    if (i + 1 < max_edges && next_x < max_x) {
+      display.drawVLine(next_x, y_high, h - 5);
+    }
+
+    cur_x = next_x;
+    level_high = !level_high;
+  }
 }
 
 void render_ir_record() {
-  draw_header("IR RECORD", have_sig ? "CAPTURED" : "LEARNING");
+  draw_header("IR RECORD", have_sig ? "CAPTURED" : "READY");
 
-  if (!have_sig) {
-    render_wait_icon(30, 18);
-    display.setFont(u8g2_font_5x7_tf);
-    draw_str_centered(40, "Waiting for IR signal...", 1);
+  // Visualizador osciloscópico de ondas ocupando a área central
+  draw_ir_waveform(4, 15, 120, 22, cur_sig.raw, have_sig ? cur_sig.count : 0);
 
-    // Live counter + pin level: 0 edges / LOW means the receiver is not
-    // reaching the pin at all.
-    uint32_t e = ir_edge_count();
-    int lvl = ir_pin_level();
-    char buf[26];
-    if (e == 0) {
-      snprintf(buf, sizeof(buf), "EDGES 0 L:%d check OUT", lvl);
+  display.setFont(u8g2_font_5x7_tf);
+  if (ir_toast[0]) {
+    draw_str_centered(43, ir_toast, 1);
+  } else if (have_sig) {
+    char code[32];
+    if (cur_sig.protocol == IR_PROTO_NEC || cur_sig.protocol == IR_PROTO_SAMSUNG) {
+      snprintf(code, sizeof(code), "%s A:0x%04X C:0x%04X", proto_name(cur_sig.protocol), cur_sig.address, cur_sig.command);
+    } else if (cur_sig.protocol == IR_PROTO_SONY) {
+      snprintf(code, sizeof(code), "SONY CMD:0x%04X", cur_sig.command);
     } else {
-      snprintf(buf, sizeof(buf), "EDGES %lu L:%d rx ok", (unsigned long)e, lvl);
+      snprintf(code, sizeof(code), "RAW %u pulses", (unsigned)cur_sig.count);
     }
-    draw_str_centered(49, buf, 1);
-
-    // Blinking capture dot
-    if ((millis() / 300) & 1) display.drawDisc(6, 46, 2);
-  } else {
-    display.setFont(u8g2_font_7x14B_tf);
-    draw_str_centered(22, proto_name(cur_sig.protocol), 1);
-
-    char code[28];
-    code_string(cur_sig, code, sizeof(code));
-    display.setFont(u8g2_font_5x7_tf);
-    draw_str_centered(33, code, 1);
-
-    char info[28];
-    if (ir_toast[0]) {
-      snprintf(info, sizeof(info), "%s", ir_toast);
-    } else {
-      snprintf(info, sizeof(info), "%u edges captured", (unsigned)cur_sig.count);
-    }
-    draw_str_centered(41, info, 1);
+    draw_str_centered(43, code, 1);
   }
 
-  // Buttons row
+  // Botões de ação direta
   draw_btn(4, 51, 38, 12, "SAVE",   ir_record_sel == 0);
   draw_btn(45, 51, 38, 12, "REPLAY", ir_record_sel == 1);
   draw_btn(86, 51, 38, 12, "BACK",   ir_record_sel == 2);
@@ -876,24 +1016,27 @@ void render_ir_detail() {
   snprintf(badge, sizeof(badge), "#%d", ir_detail_idx + 1);
   draw_header("IR SIGNAL", badge);
 
+  // Waveform do sinal salvo
+  draw_ir_waveform(4, 14, 120, 15, s->raw, s->count);
+
   display.setFont(u8g2_font_5x7_tf);
-  display.drawStr(5, 20, "PROTOCOL");
-  display.drawStr(66, 20, proto_name(s->protocol));
-
-  char code[24];
-  code_string(*s, code, sizeof(code));
-  display.drawStr(5, 30, "CODE");
-  display.drawStr(40, 30, code);
-
-  char info[28];
-  if (ir_delete_confirm) {
-    snprintf(info, sizeof(info), "ENTER again = delete");
-  } else if (ir_toast[0]) {
-    snprintf(info, sizeof(info), "%s", ir_toast);
+  char code[32];
+  if (s->protocol == IR_PROTO_NEC || s->protocol == IR_PROTO_SAMSUNG) {
+    snprintf(code, sizeof(code), "%s A:0x%04X C:0x%04X", proto_name(s->protocol), s->address, s->command);
+  } else if (s->protocol == IR_PROTO_SONY) {
+    snprintf(code, sizeof(code), "SONY CMD:0x%04X", s->command);
   } else {
-    snprintf(info, sizeof(info), "EDGES %u", (unsigned)s->count);
+    snprintf(code, sizeof(code), "RAW %u edges", (unsigned)s->count);
   }
-  display.drawStr(5, 40, info);
+  draw_str_centered(37, code, 1);
+
+  if (ir_delete_confirm) {
+    draw_str_centered(47, "ENTER AGAIN = DELETE", 1);
+  } else if (ir_toast[0]) {
+    draw_str_centered(47, ir_toast, 1);
+  } else {
+    draw_str_centered(47, "Ready to Emit", 1);
+  }
 
   draw_btn(4, 51, 38, 12, "EMIT",   ir_detail_sel == 0);
   draw_btn(45, 51, 38, 12, "DELETE", ir_detail_sel == 1);
@@ -904,37 +1047,48 @@ void render_ir_detail() {
 // RENDER: SPAM
 // =============================================================================
 void render_ir_spam() {
-  draw_header("IR SPAM", spam_running ? "LIVE" : "STOP");
+  char badge[16];
+  snprintf(badge, sizeof(badge), "%s", ir_get_spam_mode_name(ir_spam_mode));
+  draw_header("IR BLAST", badge);
 
   const IRSpamEntry &e = IR_SPAM[spam_idx];
 
   display.setFont(u8g2_font_7x14B_tf);
-  draw_str_centered(25, e.brand, 1);
+  draw_str_centered(24, e.brand, 1);
 
-  char line[32];
-  const char *action = spam_vol ? "VOL +" : "POWER";
-  snprintf(line, sizeof(line), "%s  0x%04X", action,
-           (unsigned)(spam_vol ? e.volup : e.power));
   display.setFont(u8g2_font_5x7_tf);
-  draw_str_centered(36, line, 1);
 
-  // Animated IR waves on the left
-  for (int k = 0; k < 3; k++) {
-    int r = 4 + ((anim_frame * 3 + k * 3) % 9);
-    display.drawCircle(14, 32, r);
+  // Barra de progresso para TV-B-Gone
+  if (ir_spam_mode == SPAM_MODE_TV_B_GONE) {
+    int pct = ((spam_idx + 1) * 100) / IR_SPAM_COUNT;
+    display.drawFrame(14, 32, 100, 7);
+    int bar_w = (pct * 96) / 100;
+    if (bar_w > 0) display.drawBox(16, 34, bar_w, 3);
+
+    char pbuf[24];
+    snprintf(pbuf, sizeof(pbuf), "POWER #%d/%d (%d%%)", spam_idx + 1, IR_SPAM_COUNT, pct);
+    draw_str_centered(47, pbuf, 1);
+  } else {
+    char line[32];
+    const char *act = "CMD";
+    uint16_t cval = e.power;
+    if (ir_spam_mode == SPAM_MODE_MUTE) { act = "MUTE"; cval = e.mute; }
+    else if (ir_spam_mode == SPAM_MODE_VOL_UP) { act = "VOL+"; cval = e.volup; }
+    else if (ir_spam_mode == SPAM_MODE_VOL_DOWN) { act = "VOL-"; cval = e.voldn; }
+    else { act = spam_vol ? "VOL+" : "POWER"; cval = spam_vol ? e.volup : e.power; }
+
+    snprintf(line, sizeof(line), "%s  0x%04X  #%lu", act, (unsigned)cval, (unsigned long)spam_sent);
+    draw_str_centered(36, line, 1);
+
+    // Indicador de marcas em bolinhas
+    for (int i = 0; i < IR_SPAM_COUNT; i++) {
+      int dx = 20 + i * 9;
+      if (i == spam_idx) display.drawRBox(dx - 1, 43, 7, 3, 1);
+      else              display.drawDisc(dx + 2, 44, 1);
+    }
   }
 
-  snprintf(line, sizeof(line), "SENT %lu", (unsigned long)spam_sent);
-  display.drawStr(4, 47, line);
-
-  // Brand progress pills
-  for (int i = 0; i < IR_SPAM_COUNT; i++) {
-    int dx = 60 + i * 8;
-    if (i == spam_idx) display.drawRBox(dx - 1, 44, 6, 3, 1);
-    else              display.drawDisc(dx + 1, 45, 1);
-  }
-
-  draw_hint("ENTER = STOP");
+  draw_hint("UP/DN:Mode  ENTER:Stop");
 }
 
 // =============================================================================
@@ -964,7 +1118,7 @@ void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter) {
         } else {
           DEBUG_SER_PRINT("[IR] -> back to main menu\n");
           current_screen = SCR_MAIN_MENU;
-          menu_sel = 3;
+          menu_sel = 2;
         }
       } else if (left || up) {
         menu_sel = (menu_sel - 1 + IR_MENU_LEN) % IR_MENU_LEN;
@@ -976,6 +1130,12 @@ void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter) {
       break;
 
     case SCR_IR_RECORD:
+      if (up || dn) {
+        if (have_sig) {
+          ir_clear_current();
+          toast_set("Listening...");
+        }
+      }
       if (left)  ir_record_sel = (ir_record_sel + 2) % 3;
       if (right) ir_record_sel = (ir_record_sel + 1) % 3;
       if (enter) {
@@ -991,6 +1151,7 @@ void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter) {
           if (have_sig) {
             ir_replay_current();
             toast_set("Replayed");
+            flush_input(); // Trava repetição para disparar somente 1 vez por clique
           } else {
             toast_set("No signal yet");
           }
@@ -1029,6 +1190,7 @@ void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter) {
           ir_emit_saved(ir_detail_idx);
           toast_set("Sent!");
           ir_delete_confirm = false;
+          flush_input(); // Trava repetição para disparar somente 1 vez por clique
         } else if (ir_detail_sel == 1) {
           if (!ir_delete_confirm) {
             ir_delete_confirm = true;
@@ -1047,7 +1209,13 @@ void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter) {
       break;
 
     case SCR_IR_SPAM:
-      if (enter || left || dn) {
+      if (up) {
+        ir_spam_mode = (ir_spam_mode + SPAM_MODE_COUNT - 1) % SPAM_MODE_COUNT;
+        toast_set(ir_get_spam_mode_name(ir_spam_mode));
+      } else if (dn) {
+        ir_spam_mode = (ir_spam_mode + 1) % SPAM_MODE_COUNT;
+        toast_set(ir_get_spam_mode_name(ir_spam_mode));
+      } else if (enter || left) {
         ir_stop_spam();
         current_screen = SCR_IR_MENU;
         menu_sel = 2;
@@ -1057,4 +1225,84 @@ void ir_handle_input(bool up, bool dn, bool left, bool right, bool enter) {
     default:
       break;
   }
+}
+
+// =============================================================================
+// EXPORTAÇÃO FORMATO FLIPPER ZERO (.ir)
+// =============================================================================
+void ir_export_flipper() {
+  DEBUG_SER_PRINT("\n=======================================================\n");
+  DEBUG_SER_PRINT("Filetype: IR signals file\n");
+  DEBUG_SER_PRINT("Version: 1\n");
+  DEBUG_SER_PRINT("# Exported from RTL8720DN Havoc IR Suite\n");
+  DEBUG_SER_PRINT("# -----------------------------------------------------\n");
+
+  ir_store_load();
+  if (saved_n == 0 && !have_sig) {
+    DEBUG_SER_PRINT("# Nenhum sinal gravado para exportar.\n");
+    DEBUG_SER_PRINT("=======================================================\n");
+    return;
+  }
+
+  // Se houver um sinal capturado recente na memória
+  if (have_sig) {
+    DEBUG_SER_PRINT("# Sinal Atual em Memoria:\n");
+    DEBUG_SER_PRINT("name: CURRENT_CAPTURE\n");
+    if (cur_sig.protocol == IR_PROTO_NEC) {
+      DEBUG_SER_PRINT("type: parsed\nprotocol: NEC\n");
+      char buf[64];
+      snprintf(buf, sizeof(buf), "address: %02X %02X 00 00\ncommand: %02X %02X 00 00\n",
+               (unsigned)(cur_sig.address & 0xFF), (unsigned)((cur_sig.address >> 8) & 0xFF),
+               (unsigned)(cur_sig.command & 0xFF), (unsigned)((cur_sig.command >> 8) & 0xFF));
+      DEBUG_SER_PRINT(buf);
+    } else if (cur_sig.protocol == IR_PROTO_SAMSUNG) {
+      DEBUG_SER_PRINT("type: parsed\nprotocol: Samsung32\n");
+      char buf[64];
+      snprintf(buf, sizeof(buf), "address: %02X %02X 00 00\ncommand: %02X %02X 00 00\n",
+               (unsigned)(cur_sig.address & 0xFF), (unsigned)((cur_sig.address >> 8) & 0xFF),
+               (unsigned)(cur_sig.command & 0xFF), (unsigned)((cur_sig.command >> 8) & 0xFF));
+      DEBUG_SER_PRINT(buf);
+    } else {
+      DEBUG_SER_PRINT("type: raw\nfrequency: 38000\nduty_cycle: 0.500000\ndata:");
+      for (int i = 0; i < cur_sig.count; i++) {
+        DEBUG_SER_PRINT(" ");
+        DEBUG_SER_PRINT((unsigned)cur_sig.raw[i]);
+      }
+      DEBUG_SER_PRINT("\n");
+    }
+    DEBUG_SER_PRINT("# -----------------------------------------------------\n");
+  }
+
+  // Exporta sinais gravados na Flash
+  for (int idx = 0; idx < saved_n; idx++) {
+    const IRSavedSignal &s = saved_sigs[idx];
+    char name_buf[32];
+    snprintf(name_buf, sizeof(name_buf), "name: SAVED_SLOT_%d\n", idx + 1);
+    DEBUG_SER_PRINT(name_buf);
+
+    if (s.protocol == IR_PROTO_NEC) {
+      DEBUG_SER_PRINT("type: parsed\nprotocol: NEC\n");
+      char buf[64];
+      snprintf(buf, sizeof(buf), "address: %02X %02X 00 00\ncommand: %02X %02X 00 00\n",
+               (unsigned)(s.address & 0xFF), (unsigned)((s.address >> 8) & 0xFF),
+               (unsigned)(s.command & 0xFF), (unsigned)((s.command >> 8) & 0xFF));
+      DEBUG_SER_PRINT(buf);
+    } else if (s.protocol == IR_PROTO_SAMSUNG) {
+      DEBUG_SER_PRINT("type: parsed\nprotocol: Samsung32\n");
+      char buf[64];
+      snprintf(buf, sizeof(buf), "address: %02X %02X 00 00\ncommand: %02X %02X 00 00\n",
+               (unsigned)(s.address & 0xFF), (unsigned)((s.address >> 8) & 0xFF),
+               (unsigned)(s.command & 0xFF), (unsigned)((s.command >> 8) & 0xFF));
+      DEBUG_SER_PRINT(buf);
+    } else {
+      DEBUG_SER_PRINT("type: raw\nfrequency: 38000\nduty_cycle: 0.500000\ndata:");
+      for (int i = 0; i < s.count; i++) {
+        DEBUG_SER_PRINT(" ");
+        DEBUG_SER_PRINT((unsigned)s.raw[i]);
+      }
+      DEBUG_SER_PRINT("\n");
+    }
+    DEBUG_SER_PRINT("# -----------------------------------------------------\n");
+  }
+  DEBUG_SER_PRINT("=======================================================\n\n");
 }

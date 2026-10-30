@@ -3,13 +3,14 @@
 #include <vector>
 
 #include "wifi_scanner.h"
+#include "debug.h"
 
 std::vector<WiFiScanResult> scan_results;
 bool net_marked[MAX_SCAN_RESULTS] = {false};
 int  net_sel          = 0;
 int  net_scroll       = 0;
-bool scan_done        = false;
-bool scan_in_progress = false;
+volatile bool scan_done        = false;
+volatile bool scan_in_progress = false;
 
 rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result) {
   if (scan_result == NULL) return RTW_ERROR;
@@ -57,9 +58,11 @@ rtw_result_t scanResultHandler(rtw_scan_handler_result_t *scan_result) {
     }
   } else {
     // Ameba sinaliza fim da varredura completa (todas as frequências 2.4G e 5G)
+    // A ordenação é feita pela thread principal (setup/do_scan) depois que
+    // scan_done fica visível, evitando ordenar o vector concorrentemente
+    // com a thread de eventos do WiFi.
     scan_done = true;
     scan_in_progress = false;
-    sortScanResults();
   }
   return RTW_SUCCESS;
 }
@@ -77,12 +80,80 @@ void sortScanResults() {
   }
 }
 
+int countSameSSID(const String &ssid) {
+  int n = 0;
+  for (size_t i = 0; i < scan_results.size(); i++) {
+    if (scan_results[i].ssid == ssid) n++;
+  }
+  return n;
+}
+
+// Diagnóstico: imprime SSID + BSSID de cada rede. É a única forma de provar
+// que duas linhas com o mesmo nome são rádios diferentes (BSSIDs diferentes)
+// e que uma linha "*HIDDEN*" é um SSID realmente oculto (SSID.len == 0 no
+// beacon), não um erro de parsing.
+void dumpScanResults() {
+  char line[110];
+  DEBUG_SER_PRINT("[SCAN] Lista completa (SSID | BSSID | canal | RSSI):\n");
+  for (size_t i = 0; i < scan_results.size(); i++) {
+    WiFiScanResult &r = scan_results[i];
+    snprintf(line, sizeof(line), "  %2u  %-22.22s  %s  ch%02u  %4d dBm%s\n",
+             (unsigned)i,
+             r.ssid.c_str(),
+             r.bssid_str.c_str(),
+             (unsigned)r.channel,
+             (int)r.rssi,
+             (r.ssid.length() == 0 || r.ssid == "*HIDDEN*") ? "  [HIDDEN]" : "");
+    DEBUG_SER_PRINT(line);
+  }
+
+  DEBUG_SER_PRINT("[SCAN] Nomes repetidos (mesmo SSID, BSSIDs distintos):\n");
+  bool found_dup = false;
+  for (size_t i = 0; i < scan_results.size(); i++) {
+    // Só processa o primeiro índice de cada nome
+    bool already = false;
+    for (size_t k = 0; k < i; k++) {
+      if (scan_results[k].ssid == scan_results[i].ssid) { already = true; break; }
+    }
+    if (already) continue;
+
+    int n = countSameSSID(scan_results[i].ssid);
+    if (n < 2) continue;
+    found_dup = true;
+    snprintf(line, sizeof(line), "  '%s' x%d:", scan_results[i].ssid.c_str(), n);
+    DEBUG_SER_PRINT(line);
+    for (size_t j = i; j < scan_results.size(); j++) {
+      if (scan_results[j].ssid != scan_results[i].ssid) continue;
+      DEBUG_SER_PRINT(" ");
+      DEBUG_SER_PRINT(scan_results[j].bssid_str);
+      DEBUG_SER_PRINT("(ch");
+      DEBUG_SER_PRINT((int)scan_results[j].channel);
+      DEBUG_SER_PRINT(")");
+    }
+    DEBUG_SER_PRINT("\n");
+  }
+  if (!found_dup) DEBUG_SER_PRINT("  nenhum\n");
+}
+
 void startScan() {
+  scan_done        = false;
+  scan_in_progress = true;
+
+  int ret = wifi_scan_networks(scanResultHandler, NULL);
+  if (ret != RTW_SUCCESS) {
+    // Não deixa a UI esperar o timeout inteiro por um scan que nem começou.
+    DEBUG_SER_PRINT("[SCAN] Falha ao iniciar varredura. codigo=");
+    DEBUG_SER_PRINT(ret);
+    DEBUG_SER_PRINT("\n");
+    scan_in_progress = false;
+    scan_done        = true;
+    return;
+  }
+
+  // Limpa só depois que o driver aceitou o scan: se o pedido falhar
+  // (RTW_TIMEOUT por já existir um scan rodando), a lista anterior é mantida.
   scan_results.clear();
   memset(net_marked, 0, sizeof(net_marked));
   net_sel          = 0;
   net_scroll       = 0;
-  scan_done        = false;
-  scan_in_progress = true;
-  wifi_scan_networks(scanResultHandler, NULL);
 }

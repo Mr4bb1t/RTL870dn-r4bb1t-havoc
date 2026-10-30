@@ -93,8 +93,8 @@ void setup() {
     }
 
     // Termina a splash se decorreu o tempo minimo de exibicao (SPLASH_DURATION_MS = 2500ms)
-    // E o scan concluiu com sucesso (ou atingiu o timeout maximo de 5000ms)
-    if (elapsed >= SPLASH_DURATION_MS && (scan_done || elapsed >= 5000)) {
+    // E o scan concluiu com sucesso (ou atingiu o timeout maximo de SCAN_DURATION_MS)
+    if (elapsed >= SPLASH_DURATION_MS && (scan_done || elapsed >= SCAN_DURATION_MS)) {
       break;
     }
 
@@ -119,10 +119,14 @@ void setup() {
 
   // Ordena por RSSI para que os cards de wifi já venham prontos ao entrar no menu
   if (scan_started) {
+    if (!scan_done) {
+      DEBUG_SER_PRINT("[WiFi] AVISO: timeout da splash antes do driver concluir o scan.\n");
+    }
     sortScanResults();
     DEBUG_SER_PRINT("[WiFi] Scan concluido. Redes encontradas: ");
     DEBUG_SER_PRINT((int)scan_results.size());
     DEBUG_SER_PRINT("\n");
+    dumpScanResults();
   }
 
   flush_input();
@@ -164,7 +168,7 @@ void loop() {
   // Tela do beacon e quase estatica (a animacao muda a cada 200ms). Reduzir
   // o redraw durante o flood libera o loop para enviar beacons: cada frame
   // I2C a 400kHz custa ~23ms, tempo em que nenhum beacon sai.
-  const uint32_t render_interval = isBeaconing ? 100 : 30;
+  const uint32_t render_interval = (isBeaconing || current_screen == SCR_IR_RECORD) ? 120 : 30;
   if (millis() - last_render_ms > render_interval) {
     render_screen();
     last_render_ms = millis();
